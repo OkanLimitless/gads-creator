@@ -4,8 +4,9 @@ The following changes were made to fix ESLint errors that were preventing succes
 
 ## API Routes
 1. Fixed unused `request` parameter in Google Ads accounts API route
-2. Replaced `any` types with proper error typing in API routes
-3. Improved error handling with proper type checking
+2. Removed unused `NextRequest` import from accounts route
+3. Replaced `any` types with proper error typing in API routes
+4. Improved error handling with proper type checking
 
 ## React Components
 1. Fixed proper typing for `mapErrorMessages` function in CampaignForm

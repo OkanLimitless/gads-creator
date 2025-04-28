@@ -1,0 +1,2 @@
+{"id":"94b687e2-f76e-46aa-9c5d-51caf888c4e6","timestamp":"2025-04-28T16:36:06.652Z","level":"info","context":"session:google-ads-debug:daa9df1a-47be-4b34-bbe4-3f500d8e9c40","message":"Session started"}
+{"id":"6d26563a-395c-4edf-8d23-446272fba213","timestamp":"2025-04-28T16:36:06.657Z","level":"info","context":"session:google-ads-debug:daa9df1a-47be-4b34-bbe4-3f500d8e9c40","message":"Session ended with status: error","data":{"reason":"No session or refresh token"}}

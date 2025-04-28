@@ -1,9 +1,13 @@
 // Mark this file as server-only to prevent client-side importing
 import 'server-only';
 import { diagnosticTracer, formatError, createTimeoutPromise } from './diagnostics';
+import { createLogger, createLogSession } from './serverLogger';
 
 // We will dynamically import the GoogleAdsApi to prevent it from being included in client bundles
 // This is necessary because the google-ads-api package uses Node.js specific modules
+
+// Create a dedicated logger for Google Ads operations
+const logger = createLogger('google-ads');
 
 export interface CreateCampaignParams {
   customerId: string;
@@ -113,15 +117,22 @@ export class GoogleAdsClient {
   }
 
   async getAccessibleCustomers(refreshToken: string) {
+    // Create a dedicated log session for this API call
+    const logSession = createLogSession('getAccessibleCustomers');
+    const sessionLogger = logSession.logger;
+    
     // Start diagnostic tracing
-    diagnosticTracer.start(30000); // 30 second timeout
+    diagnosticTracer.start(60000); // 60 second timeout
     diagnosticTracer.addTrace("googleAds", "getAccessibleCustomers started", { refreshTokenLength: refreshToken?.length || 0 });
+    sessionLogger.info('Starting getAccessibleCustomers', { refreshTokenLength: refreshToken?.length || 0 });
     
     try {
       if (this.useMockData) {
         console.log("GoogleAdsClient (MOCK): Getting accessible customers");
         diagnosticTracer.addTrace("googleAds", "Using mock data");
+        sessionLogger.info('Using mock data');
         diagnosticTracer.end();
+        logSession.end('success', { mock: true });
         return { resourceNames: MOCK_CUSTOMER_ACCOUNTS.map(a => a.resourceName) };
       }
       
@@ -132,20 +143,29 @@ export class GoogleAdsClient {
         length: refreshToken?.length || 0,
         firstChars: refreshToken?.substring(0, 10) || 'none'
       });
+      sessionLogger.info('Refresh token validated', {
+        length: refreshToken?.length || 0,
+        firstChars: refreshToken?.substring(0, 10) || 'none'
+      });
       
       // Dynamically import the Google Ads API only on the server side
       console.log("GoogleAdsClient: Dynamically importing Google Ads API");
       diagnosticTracer.addTrace("googleAds", "Dynamically importing Google Ads API");
+      sessionLogger.info('Dynamically importing Google Ads API');
       
       try {
         const importStartTime = Date.now();
+        sessionLogger.debug('Starting dynamic import');
+        
         const { GoogleAdsApi } = await createTimeoutPromise(
           import('google-ads-api'), 
-          10000, 
+          20000, 
           "Google Ads API module import timed out"
         );
+        
         const importDuration = Date.now() - importStartTime;
         diagnosticTracer.addTrace("googleAds", "Google Ads API module imported", { durationMs: importDuration });
+        sessionLogger.info('Google Ads API module imported', { durationMs: importDuration });
         
         // Get environment variables again to ensure they're available
         const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "";
@@ -162,6 +182,11 @@ export class GoogleAdsClient {
           clientIdLength: clientId.length,
           clientSecretLength: clientSecret.length
         });
+        sessionLogger.info('Creating GoogleAdsApi instance', {
+          developerTokenLength: developerToken.length,
+          clientIdLength: clientId.length,
+          clientSecretLength: clientSecret.length
+        });
         
         const createClientStartTime = Date.now();
         const client = new GoogleAdsApi({
@@ -174,22 +199,72 @@ export class GoogleAdsClient {
         diagnosticTracer.addTrace("googleAds", "GoogleAdsApi client created", { 
           durationMs: createClientDuration 
         });
+        sessionLogger.info('GoogleAdsApi client created', { 
+          durationMs: createClientDuration 
+        });
         
         console.log("GoogleAdsClient: Calling listAccessibleCustomers with refresh token");
         diagnosticTracer.addTrace("googleAds", "Calling listAccessibleCustomers API");
+        sessionLogger.info('Calling listAccessibleCustomers API');
+        
+        // Log a ping test to Google's servers
+        try {
+          const pingStartTime = Date.now();
+          sessionLogger.debug('Performing network test to Google APIs');
+          
+          const pingResponse = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo', {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            // Shorter timeout just for the ping test
+            signal: AbortSignal.timeout(5000),
+          }).then(res => res.ok);
+          
+          const pingDuration = Date.now() - pingStartTime;
+          sessionLogger.info('Google API network test completed', { 
+            durationMs: pingDuration,
+            success: pingResponse
+          });
+        } catch (pingError) {
+          sessionLogger.warn('Google API network test failed', { 
+            error: formatError(pingError)
+          });
+        }
         
         // Add a timeout to the API call
         const apiCallStartTime = Date.now();
+        sessionLogger.debug('Starting API call with 40 second timeout');
+        
+        // Log in background when timeout would have happened
+        setTimeout(() => {
+          sessionLogger.warn('API call duration exceeds 20 seconds', {
+            currentDuration: Date.now() - apiCallStartTime
+          });
+        }, 20000);
+        
+        setTimeout(() => {
+          sessionLogger.warn('API call duration exceeds 40 seconds', {
+            currentDuration: Date.now() - apiCallStartTime
+          });
+        }, 40000);
+        
         const customers = await createTimeoutPromise(
           client.listAccessibleCustomers(refreshToken),
-          20000, // 20 seconds timeout for the API call
+          40000, // 40 seconds timeout for the API call
           "Google Ads API listAccessibleCustomers call timed out"
         );
+        
         const apiCallDuration = Date.now() - apiCallStartTime;
         
         diagnosticTracer.addTrace("googleAds", "API call successful", { 
           durationMs: apiCallDuration,
           responseType: typeof customers
+        });
+        sessionLogger.info('API call successful', { 
+          durationMs: apiCallDuration,
+          responseType: typeof customers,
+          responseSize: JSON.stringify(customers).length
         });
         
         console.log("GoogleAdsClient: API response type:", typeof customers);
@@ -197,12 +272,21 @@ export class GoogleAdsClient {
         
         // End diagnostic tracing
         diagnosticTracer.end();
+        logSession.end('success', { 
+          durationMs: apiCallDuration,
+          responseType: typeof customers
+        });
+        
         return customers;
       } catch (importError) {
         // Handle module import errors specifically
         diagnosticTracer.addTrace("googleAds", "Error importing or initializing Google Ads API", { 
           error: formatError(importError) 
         });
+        sessionLogger.error('Error importing or initializing Google Ads API', {
+          error: formatError(importError)
+        });
+        
         throw importError;
       }
     } catch (error: any) {
@@ -220,6 +304,18 @@ export class GoogleAdsClient {
       // Capture the diagnostic trace in the error
       const diagnosticReport = diagnosticTracer.end(error, formatError(error));
       
+      // Log the error with the session logger
+      sessionLogger.error('API call failed', {
+        error: formatError(error),
+        diagnosticReport
+      });
+      
+      // End the log session
+      logSession.end('error', {
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorCode: error.code
+      });
+      
       // Create an enhanced error with diagnostic info
       const enhancedError = new Error(
         `Failed to fetch Google Ads accounts: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -230,6 +326,7 @@ export class GoogleAdsClient {
       (enhancedError as any).errorDetails = errorDetails;
       (enhancedError as any).code = error.code || 'GOOGLE_ADS_API_ERROR';
       (enhancedError as any).timestamp = new Date().toISOString();
+      (enhancedError as any).sessionId = logSession.sessionId;
       
       throw enhancedError;
     }
@@ -287,6 +384,7 @@ export class GoogleAdsClient {
           
           // MCC accounts typically have a manager account label or special permission flags
           // This is a simplified check - in a real implementation you might query specific fields
+          // to determine if it's an MCC account
           const account: CustomerAccount = {
             id: customerId,
             resourceName: customerResource,

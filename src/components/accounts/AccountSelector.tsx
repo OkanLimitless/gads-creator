@@ -81,10 +81,10 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
 
       // Set a timeout for the API call
       timeoutRef.current = setTimeout(() => {
-        console.error("Account selector: API call timeout after 10 seconds");
+        console.error("Account selector: API call timeout after 30 seconds");
         setFetchError("Request timed out. The Google Ads API might be unavailable or the refresh token might have expired.");
         setIsLoading(false);
-      }, 10000);
+      }, 30000);
 
       console.log("Account selector: Fetching accounts");
       const response = await axios.get("/api/google-ads/accounts");

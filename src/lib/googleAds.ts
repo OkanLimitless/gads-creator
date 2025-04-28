@@ -91,6 +91,20 @@ async function getAccountsDirectRestApi(refreshToken: string): Promise<any> {
   try {
     console.log("Direct REST: Starting direct REST implementation");
     
+    // Test network connectivity first
+    try {
+      console.log("Direct REST: Testing network connectivity to Google APIs");
+      const pingResponse = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      });
+      console.log("Direct REST: Network test result:", pingResponse.status, pingResponse.ok);
+    } catch (pingError) {
+      console.warn("Direct REST: Network test failed:", pingError instanceof Error ? pingError.message : "Unknown error");
+      // Continue anyway - this is just a diagnostic
+    }
+    
     // First get an access token
     const clientId = process.env.GOOGLE_CLIENT_ID || "";
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
@@ -120,26 +134,59 @@ async function getAccountsDirectRestApi(refreshToken: string): Promise<any> {
     console.log("Direct REST: Access token obtained");
     
     // Step 2: Call the Google Ads API REST accessible customers endpoint
-    const apiResponse = await fetch('https://googleads.googleapis.com/v15/customers:listAccessibleCustomers', {
+    // Correct endpoint URL according to https://developers.google.com/google-ads/api/rest/reference/rest/v16/customers/listAccessibleCustomers
+    const apiUrl = 'https://googleads.googleapis.com/v16/customers:listAccessibleCustomers';
+    console.log("Direct REST: Calling API endpoint:", apiUrl);
+    
+    // Step 3: Make the API call with proper headers
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${accessToken}`,
+      'developer-token': developerToken,
+      'Accept': 'application/json',
+      'login-customer-id': '', // Add this if needed for manager accounts
+    };
+    
+    // Remove empty headers
+    Object.keys(headers).forEach(key => {
+      if (!headers[key]) delete headers[key];
+    });
+    
+    console.log("Direct REST: Request headers:", JSON.stringify({
+      Authorization: 'Bearer [REDACTED]',
+      'developer-token': `${developerToken.substring(0, 3)}...${developerToken.substring(developerToken.length - 3)}`,
+      Accept: headers.Accept,
+      'login-customer-id': headers['login-customer-id'] || '(not set)'
+    }));
+    
+    const apiResponse = await fetch(apiUrl, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'developer-token': developerToken,
-      },
+      headers: headers,
       signal: AbortSignal.timeout(20000),
     });
     
+    console.log("Direct REST: API response status:", apiResponse.status);
+    console.log("Direct REST: API response status text:", apiResponse.statusText);
+    
+    const responseText = await apiResponse.text();
+    console.log("Direct REST: Raw API response:", responseText);
+    
     if (!apiResponse.ok) {
-      const errorText = await apiResponse.text();
-      console.error("Direct REST: API call failed:", errorText);
-      throw new Error(`Google Ads API call failed: ${errorText}`);
+      console.error("Direct REST: API call failed:", responseText);
+      throw new Error(`Google Ads API call failed: ${responseText}`);
     }
     
-    const apiData = await apiResponse.json();
+    // If we got this far, try to parse the response as JSON
+    let apiData;
+    try {
+      apiData = JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(`Failed to parse API response as JSON: ${responseText}`);
+    }
+    
     console.log("Direct REST: API call succeeded:", JSON.stringify(apiData));
     
     return apiData;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Direct REST: Error in direct REST implementation:", error);
     throw error;
   }

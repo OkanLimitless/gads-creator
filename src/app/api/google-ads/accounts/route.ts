@@ -71,12 +71,14 @@ export async function GET() {
       const mccPromise = googleAdsClient.getMCCAccounts(session.refreshToken)
         .catch(err => {
           console.log("API route: getMCCAccounts failed, will use fallback", err.message);
+          console.log("API route: getMCCAccounts error details:", err.diagnosticReport || "No diagnostic report");
           return null;
         });
         
       const customersPromise = googleAdsClient.getAccessibleCustomers(session.refreshToken)
         .catch(err => {
           console.log("API route: getAccessibleCustomers failed", err.message);
+          console.log("API route: getAccessibleCustomers error details:", err.diagnosticReport || "No diagnostic report");
           return null;
         });
       

@@ -1,0 +1,3 @@
+{"id":"3a833475-54cc-459b-82b6-3088aefa7b8f","timestamp":"2025-04-28T17:13:59.050Z","level":"info","context":"google-ads","message":"Initializing Google Ads client","data":{"environment":"production","isVercel":false,"timeout":30000}}
+{"id":"cc56adfe-82bd-42f9-901a-4f7c39028df8","timestamp":"2025-04-28T17:13:59.059Z","level":"info","context":"google-ads","message":"Initializing Google Ads client","data":{"environment":"production","isVercel":false,"timeout":30000}}
+{"id":"c385d8b6-1f8e-40ba-b3e0-c6e1f8b9c3dd","timestamp":"2025-04-28T17:14:00.168Z","level":"info","context":"google-ads","message":"Initializing Google Ads client","data":{"environment":"production","isVercel":false,"timeout":30000}}

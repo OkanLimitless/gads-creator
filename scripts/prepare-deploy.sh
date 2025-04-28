@@ -16,13 +16,18 @@ rm -rf .next || true
 echo "=== Installing dependencies ==="
 npm ci
 
+# Check for Vercel environment
+if [ "$VERCEL" = "1" ]; then
+  echo "=== Running in Vercel environment ==="
+  # Create tmp directories needed for logging
+  mkdir -p /tmp/logs || true
+  # Ensure the script doesn't fail if this fails
+  echo "Created /tmp/logs directory in Vercel environment"
+fi
+
 # Make sure we build with proper cleaning of caches
 echo "=== Building project with clean cache ==="
 npm run build
-
-# Make sure logs directory exists in Vercel
-echo "=== Creating log directories ==="
-mkdir -p /tmp/logs || true
 
 echo "=== Deployment preparation complete ==="
 echo "You can now deploy to Vercel with 'vercel deploy'" 

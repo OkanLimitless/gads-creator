@@ -21,6 +21,13 @@ interface ApiError {
   message?: string;
 }
 
+interface ApiDebugData {
+  error?: string;
+  details?: string;
+  code?: string;
+  [key: string]: unknown;
+}
+
 export function CampaignForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,6 +35,7 @@ export function CampaignForm() {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiDebug, setApiDebug] = useState<ApiDebugData | null>(null);
   
   const {
     register,
@@ -77,14 +85,31 @@ export function CampaignForm() {
   const onSubmit: SubmitHandler<CampaignFormData> = async (data) => {
     setIsSubmitting(true);
     setError(null);
+    setApiDebug(null);
     
     try {
+      console.log("Submitting campaign with data:", data);
       const response = await axios.post("/api/google-ads/campaigns", data);
-      router.push(`/dashboard/campaigns/success?id=${response.data.campaignId}`);
+      console.log("Campaign creation response:", response.data);
+      
+      if (response.data.success) {
+        router.push(`/dashboard/campaigns/success?id=${response.data.campaignId}`);
+      } else {
+        // Handle failure but with a valid response
+        setError(response.data.error || "Failed to create campaign. Please try again.");
+        setApiDebug(response.data);
+        setIsSubmitting(false);
+      }
     } catch (err: unknown) {
       console.error("Error creating campaign:", err);
       const apiError = err as ApiError;
       setError(apiError.response?.data?.error || apiError.message || "Failed to create campaign");
+      
+      // Store debug information
+      if (apiError.response?.data) {
+        setApiDebug(apiError.response.data as ApiDebugData);
+      }
+      
       setIsSubmitting(false);
     }
   };
@@ -108,6 +133,15 @@ export function CampaignForm() {
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Error creating campaign</h3>
               <div className="mt-2 text-sm text-red-700">{error}</div>
+              
+              {apiDebug && (
+                <details className="mt-2">
+                  <summary className="text-xs text-red-600 cursor-pointer">Debug Information</summary>
+                  <pre className="mt-2 text-xs bg-red-50 p-2 rounded overflow-auto max-h-40">
+                    {JSON.stringify(apiDebug, null, 2)}
+                  </pre>
+                </details>
+              )}
             </div>
           </div>
         </div>

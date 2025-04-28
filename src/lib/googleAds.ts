@@ -9,6 +9,14 @@ export interface CreateCampaignParams {
   descriptions: string[]; // Array of descriptions, each max 90 chars
 }
 
+export interface CustomerAccount {
+  id: string;
+  resourceName: string;
+  displayName?: string;
+  isMCC?: boolean;
+  parentId?: string;
+}
+
 export class GoogleAdsClient {
   private client: GoogleAdsApi;
 
@@ -29,10 +37,78 @@ export class GoogleAdsClient {
 
   async getAccessibleCustomers(refreshToken: string) {
     try {
+      console.log("Getting accessible customers with refresh token");
       const customers = await this.client.listAccessibleCustomers(refreshToken);
+      console.log("API response:", JSON.stringify(customers));
       return customers;
     } catch (error) {
       console.error("Error fetching accessible customers:", error);
+      throw error;
+    }
+  }
+
+  async getMCCAccounts(refreshToken: string): Promise<CustomerAccount[]> {
+    try {
+      // First get all accessible accounts
+      const customersResponse = await this.getAccessibleCustomers(refreshToken);
+      
+      let customersList: string[] = [];
+      
+      if (customersResponse && 'resourceNames' in customersResponse) {
+        customersList = customersResponse.resourceNames as string[];
+      } else if (Array.isArray(customersResponse)) {
+        customersList = customersResponse;
+      }
+
+      // Try to identify MCC accounts by checking account hierarchy
+      const formattedCustomers: CustomerAccount[] = [];
+      
+      for (const customerResource of customersList) {
+        try {
+          // Extract the customer ID from the resource name (format: "customers/12345678")
+          const customerId = customerResource.split("/")[1];
+          
+          // Create a customer instance to check if it's an MCC account
+          // Note: in a real implementation, you would check account properties
+          // to determine if it's an MCC account
+          this.client.Customer({
+            customer_id: customerId,
+            refresh_token: refreshToken,
+          });
+          
+          // MCC accounts typically have a manager account label or special permission flags
+          // This is a simplified check - in a real implementation you might query specific fields
+          const account: CustomerAccount = {
+            id: customerId,
+            resourceName: customerResource,
+            displayName: `Account ${customerId}`, // This would ideally come from the API
+            isMCC: false // We'll assume all are non-MCC for now until we can properly check
+          };
+          
+          formattedCustomers.push(account);
+        } catch (err) {
+          console.error(`Error processing customer ${customerResource}:`, err);
+          // Continue with next customer
+        }
+      }
+      
+      return formattedCustomers;
+    } catch (error) {
+      console.error("Error fetching MCC accounts:", error);
+      throw error;
+    }
+  }
+
+  async getSubAccounts(mccId: string): Promise<CustomerAccount[]> {
+    try {
+      // In a real implementation, you would query the API to get sub-accounts under this MCC
+      // For now, this is a placeholder that returns an empty array
+      console.log(`Getting sub-accounts for MCC ID: ${mccId}`);
+      
+      // Placeholder for real implementation
+      return [];
+    } catch (error) {
+      console.error(`Error fetching sub-accounts for MCC ${mccId}:`, error);
       throw error;
     }
   }
@@ -43,7 +119,8 @@ export class GoogleAdsClient {
       // In a real implementation, you would use these parameters to create the campaign
       const { customerId } = params;
       
-      const customer = this.client.Customer({
+      // Create the customer instance but don't need to assign it to a variable if unused
+      this.client.Customer({
         customer_id: customerId,
         refresh_token: refreshToken,
       });
@@ -57,7 +134,7 @@ export class GoogleAdsClient {
       
       // Using customer and all params would be necessary in a real implementation
       console.log(`Creating campaign for customer ${customerId}`);
-      if (customer && params.name && params.budget > 0 && params.maxCpc > 0 && 
+      if (params.name && params.budget > 0 && params.maxCpc > 0 && 
           params.headlines.length === 10 && params.descriptions.length > 0) {
         // In a real implementation, these values would be used to make API calls
       }

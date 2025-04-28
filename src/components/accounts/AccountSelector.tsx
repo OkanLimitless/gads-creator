@@ -6,6 +6,9 @@ import axios from "axios";
 interface Customer {
   id: string;
   resourceName: string;
+  displayName?: string;
+  isMCC?: boolean;
+  parentId?: string;
 }
 
 interface AccountSelectorProps {
@@ -27,13 +30,19 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedMCC, setSelectedMCC] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchCustomers() {
       try {
         setLoading(true);
+        console.log("Fetching accounts for selector");
         const response = await axios.get("/api/google-ads/accounts");
-        setCustomers(response.data.customers || []);
+        console.log("Account selector API response:", response.data);
+        
+        // Handle both accounts and customers property names for backward compatibility
+        const accountData = response.data.accounts || response.data.customers || [];
+        setCustomers(accountData);
       } catch (err: unknown) {
         console.error("Error fetching customers:", err);
         const apiError = err as ApiError;
@@ -45,6 +54,16 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
 
     fetchCustomers();
   }, []);
+
+  // Get list of MCC accounts
+  const mccAccounts = customers.filter(customer => customer.isMCC === true);
+  
+  // Get regular accounts, filtered by selected MCC if applicable
+  const regularAccounts = customers.filter(customer => {
+    if (customer.isMCC) return false;
+    if (selectedMCC) return customer.parentId === selectedMCC;
+    return true;
+  });
 
   if (loading) {
     return (
@@ -85,27 +104,55 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
   }
 
   return (
-    <div>
-      <label htmlFor="account" className="block text-sm font-medium text-gray-700">
-        Google Ads Account
-      </label>
-      <select
-        id="account"
-        name="account"
-        className={`mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md ${
-          error ? "border-red-300" : "border-gray-300"
-        }`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">Select an account</option>
-        {customers.map((customer) => (
-          <option key={customer.id} value={customer.id}>
-            {customer.id}
-          </option>
-        ))}
-      </select>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    <div className="space-y-4">
+      {/* MCC Account Selector - only show if there are MCC accounts */}
+      {mccAccounts.length > 0 && (
+        <div>
+          <label htmlFor="mcc-selector" className="block text-sm font-medium text-gray-700">
+            Select MCC Account (Optional)
+          </label>
+          <select
+            id="mcc-selector"
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+            value={selectedMCC || ""}
+            onChange={(e) => {
+              setSelectedMCC(e.target.value || null);
+              // Clear the current account selection if MCC changes
+              onChange("");
+            }}
+          >
+            <option value="">All Accounts</option>
+            {mccAccounts.map((mcc) => (
+              <option key={mcc.id} value={mcc.id}>
+                {mcc.displayName || `MCC: ${mcc.id}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div>
+        <label htmlFor="account" className="block text-sm font-medium text-gray-700">
+          Google Ads Account
+        </label>
+        <select
+          id="account"
+          name="account"
+          className={`mt-1 block w-full pl-3 pr-10 py-2 text-base focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md ${
+            error ? "border-red-300" : "border-gray-300"
+          }`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Select an account</option>
+          {regularAccounts.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.displayName || `Account: ${customer.id}`}
+            </option>
+          ))}
+        </select>
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      </div>
     </div>
   );
 } 

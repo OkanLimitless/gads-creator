@@ -4,10 +4,14 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import axios from "axios";
+import { MCCAccountList } from "@/components/accounts/MCCAccountList";
 
 interface Customer {
   id: string;
   resourceName: string;
+  displayName?: string;
+  isMCC?: boolean;
+  parentId?: string;
 }
 
 interface ApiError {
@@ -29,9 +33,20 @@ export default function DashboardPage() {
     async function fetchCustomers() {
       try {
         setLoading(true);
+        console.log("Fetching accounts from API");
         const response = await axios.get("/api/google-ads/accounts");
-        setCustomers(response.data.customers || []);
+        console.log("API response:", response.data);
+        
+        // Handle both accounts and customers property names for backward compatibility
+        const accountData = response.data.accounts || response.data.customers || [];
+        setCustomers(accountData);
         setError(null);
+        
+        if (accountData.length > 0) {
+          console.log(`Found ${accountData.length} accounts`);
+        } else {
+          console.log("No accounts found");
+        }
       } catch (err: unknown) {
         console.error("Error fetching customers:", err);
         const apiError = err as ApiError;
@@ -109,36 +124,8 @@ export default function DashboardPage() {
         </div>
       </div>
       
-      <div className="mt-6 grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {customers.map((customer) => (
-          <div
-            key={customer.id}
-            className="bg-white overflow-hidden shadow rounded-lg"
-          >
-            <div className="px-4 py-5 sm:p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0 bg-blue-500 rounded-md p-3">
-                  <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                  </svg>
-                </div>
-                <div className="ml-5">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Account: {customer.id}
-                  </h3>
-                  <div className="mt-3">
-                    <Link
-                      href={`/dashboard/campaigns/new?customerId=${customer.id}`}
-                      className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md"
-                    >
-                      Create Campaign
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="mt-6">
+        <MCCAccountList accounts={customers} />
       </div>
     </div>
   );

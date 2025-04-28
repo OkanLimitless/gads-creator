@@ -15,7 +15,7 @@ interface DetailedError {
 // Simple in-memory cache for accounts
 // This will be cleared when the serverless function restarts
 const accountsCache = new Map<string, {data: any, timestamp: number}>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour cache TTL to avoid repeated API calls
 
 export async function GET() {
   console.log("API route: GET /api/google-ads/accounts - Starting");
@@ -63,53 +63,60 @@ export async function GET() {
 
     console.log("API route: Session found, fetching Google Ads accounts");
     
+    // Run both methods simultaneously to increase chances of success
     try {
-      // First try to get MCC accounts to support account hierarchy
-      console.log("API route: Calling getMCCAccounts");
-      const accounts = await googleAdsClient.getMCCAccounts(session.refreshToken);
-      console.log(`API route: Found ${accounts.length} accounts`);
-      console.log("API route: First few accounts:", accounts.slice(0, 3));
+      // Start both API calls at the same time
+      console.log("API route: Running getMCCAccounts and getAccessibleCustomers in parallel");
       
-      const responseData = { 
-        accounts: accounts,
-        success: true 
-      };
+      const mccPromise = googleAdsClient.getMCCAccounts(session.refreshToken)
+        .catch(err => {
+          console.log("API route: getMCCAccounts failed, will use fallback", err.message);
+          return null;
+        });
+        
+      const customersPromise = googleAdsClient.getAccessibleCustomers(session.refreshToken)
+        .catch(err => {
+          console.log("API route: getAccessibleCustomers failed", err.message);
+          return null;
+        });
       
-      // Cache the successful response
-      accountsCache.set(cacheKey, {
-        data: responseData,
-        timestamp: now
-      });
+      // Wait for both results
+      const [mccResult, customersResult] = await Promise.all([mccPromise, customersPromise]);
       
-      return NextResponse.json(responseData);
-    } catch (adError: any) {
-      console.error("API route: Error in Google Ads API call:", adError);
-      console.error("API route: Error details:", adError.message);
-      if (adError.stack) {
-        console.error("API route: Error stack:", adError.stack);
+      // Process getMCCAccounts result if available
+      if (mccResult) {
+        console.log(`API route: Found ${mccResult.length} accounts via getMCCAccounts`);
+        
+        const responseData = { 
+          accounts: mccResult,
+          success: true 
+        };
+        
+        // Cache the successful response
+        accountsCache.set(cacheKey, {
+          data: responseData,
+          timestamp: now
+        });
+        
+        return NextResponse.json(responseData);
       }
       
-      // Capture diagnostic report if available
-      const diagnosticReport = adError.diagnosticReport || null;
-      
-      // If getMCCAccounts fails, fallback to the original implementation
-      console.log("API route: Falling back to getAccessibleCustomers");
-      try {
-        const customersResponse = await googleAdsClient.getAccessibleCustomers(session.refreshToken);
+      // Process getAccessibleCustomers result as fallback
+      if (customersResult) {
+        console.log("API route: Using getAccessibleCustomers result as fallback");
         
         // The response format isn't well typed in the library, so we check and handle it appropriately
         let customersList: string[] = [];
         
-        if (customersResponse && 'resourceNames' in customersResponse) {
+        if (customersResult && typeof customersResult === 'object' && 'resourceNames' in customersResult) {
           // Handle the case where it returns { resourceNames: string[] }
-          customersList = customersResponse.resourceNames as string[];
-        } else if (Array.isArray(customersResponse)) {
+          customersList = customersResult.resourceNames as string[];
+        } else if (Array.isArray(customersResult)) {
           // Handle the case where it returns string[]
-          customersList = customersResponse;
+          customersList = customersResult;
         }
 
         console.log(`API route: Found ${customersList.length} customers via fallback`);
-        console.log("API route: customersList:", customersList);
 
         // Format the customer IDs for the frontend
         const formattedCustomers = customersList.map((customerResource: string) => {
@@ -121,36 +128,45 @@ export async function GET() {
             displayName: `Account ${customerId}`, // Simple display name for better UX
           };
         });
-
-        return NextResponse.json({ customers: formattedCustomers });
-      } catch (fallbackError: any) {
-        // Both methods failed, return a detailed error
-        const fallbackDiagnosticReport = fallbackError.diagnosticReport || null;
         
-        const errorDetail: DetailedError = {
-          message: "Failed to fetch Google Ads accounts after multiple attempts",
-          details: fallbackError.message || "Unknown error in fallback method",
-          code: fallbackError.code || "GOOGLE_ADS_API_ERROR",
-          timestamp: new Date().toISOString(),
-          diagnosticReport: fallbackDiagnosticReport || diagnosticReport
+        const responseData = {
+          customers: formattedCustomers,
+          success: true
         };
         
-        console.error("API route: Both API methods failed:", errorDetail);
-        console.error("API route: Original error:", adError);
-        console.error("API route: Fallback error:", fallbackError);
-        
-        return NextResponse.json(
-          { 
-            error: errorDetail.message,
-            details: errorDetail.details,
-            code: errorDetail.code,
-            timestamp: errorDetail.timestamp,
-            diagnosticReport: errorDetail.diagnosticReport,
-            originalError: adError.message || "Unknown primary error",
-          },
-          { status: 500 }
-        );
+        // Cache the successful response
+        accountsCache.set(cacheKey, {
+          data: responseData,
+          timestamp: now
+        });
+
+        return NextResponse.json(responseData);
       }
+      
+      // Both methods failed
+      throw new Error("Both API methods failed to return valid data");
+    } catch (error: any) {
+      // Both methods failed, return a detailed error
+      const errorDetail: DetailedError = {
+        message: "Failed to fetch Google Ads accounts after multiple attempts",
+        details: error.message || "Unknown error in API calls",
+        code: error.code || "GOOGLE_ADS_API_ERROR",
+        timestamp: new Date().toISOString(),
+        diagnosticReport: error.diagnosticReport || null
+      };
+      
+      console.error("API route: All API methods failed:", errorDetail);
+      
+      return NextResponse.json(
+        { 
+          error: errorDetail.message,
+          details: errorDetail.details,
+          code: errorDetail.code,
+          timestamp: errorDetail.timestamp,
+          diagnosticReport: errorDetail.diagnosticReport
+        },
+        { status: 500 }
+      );
     }
   } catch (error: unknown) {
     const timestamp = new Date().toISOString();

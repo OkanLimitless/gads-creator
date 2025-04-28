@@ -12,11 +12,9 @@ let googleAdsApiModule: any = null;
 // Create a dedicated logger for Google Ads operations
 const logger = createLogger('google-ads');
 
-// Calculate API timeout based on environment
-// For Vercel deployments, we need to respect the maxDuration (60s) in vercel.json,
-// but account for processing overhead by setting timeout at 50s
+// Maximize timeout values to get real data
 const IS_VERCEL = process.env.VERCEL === '1';
-const TIMEOUT_MS = IS_VERCEL ? 55000 : 45000; // Increased from 50/30 to 55/45 seconds
+const TIMEOUT_MS = 55000; // Just under Vercel's 60s limit to allow for processing
 
 logger.info('Initializing Google Ads client', {
   environment: process.env.NODE_ENV,
@@ -368,11 +366,14 @@ export class GoogleAdsClient {
       
       const customersResponse = await this.getAccessibleCustomers(refreshToken);
       
+      // The response format isn't well typed in the library, so we check and handle it appropriately
       let customersList: string[] = [];
       
-      if (customersResponse && 'resourceNames' in customersResponse) {
+      if (customersResponse && typeof customersResponse === 'object' && 'resourceNames' in customersResponse) {
+        // Handle the case where it returns { resourceNames: string[] }
         customersList = customersResponse.resourceNames as string[];
       } else if (Array.isArray(customersResponse)) {
+        // Handle the case where it returns string[]
         customersList = customersResponse;
       }
 

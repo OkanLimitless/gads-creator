@@ -58,14 +58,10 @@ export default function DashboardPage() {
         
         // Set a timeout to handle cases where the API call hangs
         timeoutRef.current = setTimeout(() => {
-          console.error("API call timeout after 30 seconds");
-          console.log("Using mock data due to API timeout");
-          
-          // Instead of showing error, use mock data as a fallback
-          setCustomers(MOCK_ACCOUNTS);
-          setShowMockData(true);
+          console.error("API call timeout after 60 seconds");
+          setError("The Google Ads API request is taking longer than expected. Please refresh the page to try again.");
           setLoading(false);
-        }, 30000); // Increased to 30 seconds
+        }, 60000); // Increase to 60 seconds (max Vercel function duration)
 
         console.log("Fetching accounts from API");
         const response = await axios.get("/api/google-ads/accounts");

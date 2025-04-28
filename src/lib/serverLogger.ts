@@ -22,18 +22,31 @@ interface LogEntry {
 let memoryLogs: LogEntry[] = [];
 const MAX_MEMORY_LOGS = 100;
 
-// Directory for log files - uses tmp directory in development
-const LOG_DIR = process.env.NODE_ENV === 'production'
-  ? path.join(process.cwd(), 'logs')
-  : path.join(process.cwd(), '.logs');
+// Detect if we're running in a serverless environment
+const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
 
-// Ensure the log directory exists
+// In serverless environments, we can only write to /tmp
+const LOG_DIR = IS_SERVERLESS 
+  ? '/tmp/logs' 
+  : process.env.NODE_ENV === 'production'
+    ? path.join(process.cwd(), 'logs')
+    : path.join(process.cwd(), '.logs');
+
+// Flag to track if file logging is available
+let fileLoggingAvailable = !IS_SERVERLESS; // Default to true unless we know we're in serverless
+
+// Try to create log directory - only once at startup
 try {
   if (!fs.existsSync(LOG_DIR)) {
     fs.mkdirSync(LOG_DIR, { recursive: true });
+    console.log(`Created log directory at ${LOG_DIR}`);
+    fileLoggingAvailable = true;
+  } else {
+    fileLoggingAvailable = true;
   }
 } catch (err) {
-  console.error('Failed to create log directory:', err);
+  console.warn(`Failed to create log directory: ${err}. File logging disabled.`);
+  fileLoggingAvailable = false;
 }
 
 // Format a log entry for output
@@ -49,22 +62,31 @@ function formatLogEntry(entry: LogEntry): string {
   }
 }
 
-// Write a log entry to disk
+// Write a log entry to disk - only if file logging is available
 function persistLog(entry: LogEntry) {
+  // Always add to memory logs first
+  memoryLogs.unshift(entry);
+  if (memoryLogs.length > MAX_MEMORY_LOGS) {
+    memoryLogs = memoryLogs.slice(0, MAX_MEMORY_LOGS);
+  }
+  
+  // Skip file writing if we know it's not available
+  if (!fileLoggingAvailable) {
+    return;
+  }
+  
   try {
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const logFile = path.join(LOG_DIR, `server-${today}.log`);
     
     const logLine = formatLogEntry(entry) + "\n";
     fs.appendFileSync(logFile, logLine);
-    
-    // Add to memory logs
-    memoryLogs.unshift(entry);
-    if (memoryLogs.length > MAX_MEMORY_LOGS) {
-      memoryLogs = memoryLogs.slice(0, MAX_MEMORY_LOGS);
-    }
   } catch (err) {
-    console.error('Failed to write log entry:', err);
+    // Only log the first file write error
+    if (fileLoggingAvailable) {
+      console.warn(`Failed to write log entry to file: ${err}. Falling back to memory-only logging.`);
+      fileLoggingAvailable = false;
+    }
   }
 }
 
@@ -157,4 +179,13 @@ export function createLogSession(sessionName: string) {
       return sessionId;
     }
   };
-} 
+}
+
+// Add information about the logging setup
+export const loggerInfo = {
+  isServerless: IS_SERVERLESS,
+  logDirectory: LOG_DIR,
+  fileLoggingAvailable,
+  inMemoryLogCount: () => memoryLogs.length,
+  environment: process.env.NODE_ENV || 'unknown'
+}; 

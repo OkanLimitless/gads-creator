@@ -3,9 +3,24 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { createLogger, createLogSession } from "@/lib/serverLogger";
 import { formatError } from "@/lib/diagnostics";
+import fs from "fs";
 
 // Create a logger for this endpoint
 const logger = createLogger("debug-google-ads-api");
+
+// Environment test details interface
+interface EnvTestDetails {
+  isVercel: boolean;
+  isAWS: boolean;
+  nodeEnv: string;
+  tempDir: string;
+  cwd: string;
+  platform: string;
+  nodeVersion: string;
+  fileSystemWritable?: boolean;
+  fileSystemTest?: string;
+  fileSystemError?: string;
+}
 
 export async function GET(request: NextRequest) {
   // Create a log session for this diagnostic test
@@ -41,10 +56,53 @@ export async function GET(request: NextRequest) {
       refreshTokenLength: session.refreshToken.length
     });
     
-    // Test 1: Basic connectivity to Google APIs
+    // Test array to collect all results
     const tests = [];
     
-    // Test connectivity to Google's general API endpoints
+    // Test 0: Check server environment and filesystem access
+    try {
+      sessionLogger.info("Testing server environment");
+      const envTest = {
+        name: "Server Environment",
+        success: true,
+        details: {
+          isVercel: process.env.VERCEL === '1',
+          isAWS: !!process.env.AWS_LAMBDA_FUNCTION_NAME,
+          nodeEnv: process.env.NODE_ENV,
+          tempDir: process.env.TMPDIR || '/tmp',
+          cwd: process.cwd(),
+          platform: process.platform,
+          nodeVersion: process.version
+        } as EnvTestDetails
+      };
+      
+      // Test filesystem access
+      try {
+        const testFilePath = `/tmp/google-ads-test-${Date.now()}.txt`;
+        fs.writeFileSync(testFilePath, 'test');
+        const fileExists = fs.existsSync(testFilePath);
+        fs.unlinkSync(testFilePath);
+        
+        envTest.details.fileSystemWritable = true;
+        envTest.details.fileSystemTest = 'success';
+      } catch (fsError) {
+        envTest.details.fileSystemWritable = false;
+        envTest.details.fileSystemTest = 'failed';
+        envTest.details.fileSystemError = fsError instanceof Error ? fsError.message : String(fsError);
+        // This is not a critical failure, so keep success as true
+      }
+      
+      tests.push(envTest);
+    } catch (envError) {
+      sessionLogger.error("Environment test failed", { error: formatError(envError) });
+      tests.push({
+        name: "Server Environment",
+        success: false,
+        error: envError instanceof Error ? envError.message : String(envError)
+      });
+    }
+    
+    // Test 1: Basic connectivity to Google APIs
     try {
       sessionLogger.info("Testing general Google API connectivity");
       const startTime = Date.now();

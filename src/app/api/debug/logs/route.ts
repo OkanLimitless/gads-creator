@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getRecentLogs, getLogsByContext } from "@/lib/serverLogger";
+import { getRecentLogs, getLogsByContext, loggerInfo } from "@/lib/serverLogger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,17 +22,43 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const level = searchParams.get('level') as any;
     
+    // Get logs based on parameters
+    let logs = [];
     if (context) {
-      const logs = getLogsByContext(context, limit);
-      return NextResponse.json({ logs, count: logs.length });
+      logs = getLogsByContext(context, limit);
     } else {
-      const logs = getRecentLogs(limit, level);
-      return NextResponse.json({ logs, count: logs.length });
+      logs = getRecentLogs(limit, level);
     }
+    
+    // Add status info to the response
+    return NextResponse.json({ 
+      logs,
+      count: logs.length,
+      loggerStatus: {
+        ...loggerInfo,
+        inMemoryLogCount: loggerInfo.inMemoryLogCount(),
+        serverTime: new Date().toISOString(),
+        // Add environment-specific info to help debug serverless issues
+        env: {
+          vercel: process.env.VERCEL === '1' ? true : false,
+          aws: process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined,
+          nodeEnv: process.env.NODE_ENV,
+          tempDir: process.env.TMPDIR || '/tmp'
+        }
+      }
+    });
   } catch (error) {
     console.error("Error retrieving logs:", error);
     return NextResponse.json(
-      { error: "Failed to retrieve logs" },
+      { 
+        error: "Failed to retrieve logs",
+        message: error instanceof Error ? error.message : String(error),
+        loggerStatus: {
+          ...loggerInfo,
+          inMemoryLogCount: loggerInfo.inMemoryLogCount(),
+          serverTime: new Date().toISOString()
+        }
+      },
       { status: 500 }
     );
   }

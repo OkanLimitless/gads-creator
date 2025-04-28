@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 
-// This ensures the redirect happens on both client and server
+// Configure the runtime for this page
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+// Home page that redirects to login
 export default function Home() {
   // Use the redirect function to send users to the login page
   redirect("/login");

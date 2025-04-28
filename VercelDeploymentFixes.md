@@ -29,5 +29,9 @@ The following changes were made to fix ESLint errors that were preventing succes
 ## Next.js Configuration
 1. Created dedicated auth config file at `src/lib/auth.ts` to store NextAuth configuration
 2. Updated imports in API routes to reference the new auth config location
+3. Fixed routing conflicts between `page.tsx` and `route.js` files
+4. Added proper runtime configuration directly in page components
+5. Updated Next.js config with redirects and image domains
+6. Removed turbopack flag from development script
 
 These changes ensure that the application can be successfully deployed on Vercel while maintaining good code quality and type safety. 

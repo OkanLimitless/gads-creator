@@ -85,13 +85,15 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
       setLoadingProgress('Initializing connection...');
 
       // Set progress updates - calculate based on timeout
-      const progressInterval = Math.floor(CLIENT_TIMEOUT_MS / 6); // 6 steps
+      const progressInterval = Math.floor(CLIENT_TIMEOUT_MS / 8); // 8 steps for more frequent updates
       const progressUpdates = [
         { time: progressInterval, message: 'Connecting to Google Ads API...' },
         { time: progressInterval * 2, message: 'API request in progress...' },
         { time: progressInterval * 3, message: 'Still waiting for response...' },
         { time: progressInterval * 4, message: 'This is taking longer than expected...' },
-        { time: progressInterval * 5, message: 'Almost there, please wait...' }
+        { time: progressInterval * 5, message: 'Google Ads API is slow today...' },
+        { time: progressInterval * 6, message: 'Almost there, please wait...' },
+        { time: progressInterval * 7, message: 'Fallback to sample data in a few seconds...' }
       ];
       
       // Schedule progress updates
@@ -104,9 +106,13 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
       // Set a timeout for the API call
       timeoutRef.current = setTimeout(() => {
         console.error(`Account selector: API call timeout after ${CLIENT_TIMEOUT_MS/1000} seconds`);
-        setFetchError("Request timed out. The Google Ads API might be unavailable or the refresh token might have expired.");
+        console.log("Using mock data due to API timeout");
+        
+        // Instead of showing error, use mock data as a fallback
+        setAccounts(MOCK_CUSTOMER_ACCOUNTS);
+        setUseMockData(true);
         setIsLoading(false);
-        setLoadingProgress('Timed out');
+        setLoadingProgress('Using sample data (API timeout)');
       }, CLIENT_TIMEOUT_MS);
 
       console.log("Account selector: Fetching accounts");

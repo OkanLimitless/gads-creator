@@ -12,6 +12,11 @@ interface DetailedError {
   diagnosticReport?: any;
 }
 
+// Simple in-memory cache for accounts
+// This will be cleared when the serverless function restarts
+const accountsCache = new Map<string, {data: any, timestamp: number}>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
 export async function GET() {
   console.log("API route: GET /api/google-ads/accounts - Starting");
   
@@ -45,6 +50,16 @@ export async function GET() {
         { status: 401 }
       );
     }
+    
+    // Check if we have cached data for this user
+    const cacheKey = `accounts-${session.user?.email}`;
+    const cachedData = accountsCache.get(cacheKey);
+    const now = Date.now();
+    
+    if (cachedData && (now - cachedData.timestamp < CACHE_TTL)) {
+      console.log("API route: Using cached accounts data");
+      return NextResponse.json(cachedData.data);
+    }
 
     console.log("API route: Session found, fetching Google Ads accounts");
     
@@ -55,10 +70,18 @@ export async function GET() {
       console.log(`API route: Found ${accounts.length} accounts`);
       console.log("API route: First few accounts:", accounts.slice(0, 3));
       
-      return NextResponse.json({ 
+      const responseData = { 
         accounts: accounts,
         success: true 
+      };
+      
+      // Cache the successful response
+      accountsCache.set(cacheKey, {
+        data: responseData,
+        timestamp: now
       });
+      
+      return NextResponse.json(responseData);
     } catch (adError: any) {
       console.error("API route: Error in Google Ads API call:", adError);
       console.error("API route: Error details:", adError.message);

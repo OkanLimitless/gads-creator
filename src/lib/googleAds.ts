@@ -6,6 +6,9 @@ import { createLogger, createLogSession } from './serverLogger';
 // We will dynamically import the GoogleAdsApi to prevent it from being included in client bundles
 // This is necessary because the google-ads-api package uses Node.js specific modules
 
+// Cache for the dynamically imported module to avoid repeated imports
+let googleAdsApiModule: any = null;
+
 // Create a dedicated logger for Google Ads operations
 const logger = createLogger('google-ads');
 
@@ -169,11 +172,19 @@ export class GoogleAdsClient {
         const importStartTime = Date.now();
         sessionLogger.debug('Starting dynamic import');
         
-        const { GoogleAdsApi } = await createTimeoutPromise(
-          import('google-ads-api'), 
-          20000, 
-          "Google Ads API module import timed out"
-        );
+        // Use cached module if available, otherwise import
+        if (!googleAdsApiModule) {
+          googleAdsApiModule = await createTimeoutPromise(
+            import('google-ads-api'), 
+            20000, 
+            "Google Ads API module import timed out"
+          );
+          console.log("GoogleAdsClient: Google Ads API module imported and cached");
+        } else {
+          console.log("GoogleAdsClient: Using cached Google Ads API module");
+        }
+        
+        const { GoogleAdsApi } = googleAdsApiModule;
         
         const importDuration = Date.now() - importStartTime;
         diagnosticTracer.addTrace("googleAds", "Google Ads API module imported", { durationMs: importDuration });

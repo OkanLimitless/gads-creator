@@ -58,10 +58,14 @@ export default function DashboardPage() {
         
         // Set a timeout to handle cases where the API call hangs
         timeoutRef.current = setTimeout(() => {
-          console.error("API call timeout after 10 seconds");
-          setError("Request timed out. The Google Ads API might be unavailable or the refresh token might have expired.");
+          console.error("API call timeout after 30 seconds");
+          console.log("Using mock data due to API timeout");
+          
+          // Instead of showing error, use mock data as a fallback
+          setCustomers(MOCK_ACCOUNTS);
+          setShowMockData(true);
           setLoading(false);
-        }, 20000);
+        }, 30000); // Increased to 30 seconds
 
         console.log("Fetching accounts from API");
         const response = await axios.get("/api/google-ads/accounts");

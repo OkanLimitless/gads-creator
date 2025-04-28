@@ -54,11 +54,19 @@ export class GoogleAdsClient {
                                clientId && clientId.length > 10 && 
                                clientSecret && clientSecret.length > 10;
     
+    // Log environment variable status for debugging
+    console.log("GoogleAdsClient: Environment variables check:");
+    console.log("- GOOGLE_ADS_DEVELOPER_TOKEN:", developerToken ? `Present (${developerToken.substring(0, 3)}...${developerToken.substring(developerToken.length - 3)})` : 'Missing');
+    console.log("- GOOGLE_CLIENT_ID:", clientId ? `Present (${clientId.substring(0, 3)}...${clientId.substring(clientId.length - 3)})` : 'Missing');
+    console.log("- GOOGLE_CLIENT_SECRET:", clientSecret ? `Present (${clientSecret.substring(0, 3)}...${clientSecret.substring(clientSecret.length - 3)})` : 'Missing');
+    console.log("- hasValidCredentials:", hasValidCredentials);
+    console.log("- isClientSide:", typeof window !== 'undefined');
+    
     // Always use mock data on the client side or if credentials are missing
     this.useMockData = !hasValidCredentials || typeof window !== 'undefined';
     
     if (this.useMockData) {
-      console.warn("GoogleAdsClient: Using mock data mode.");
+      console.warn("GoogleAdsClient: Using mock data mode. Reason:", !hasValidCredentials ? "Invalid credentials" : "Client-side environment");
       this.client = null;
       return;
     }
@@ -67,6 +75,7 @@ export class GoogleAdsClient {
       // We're not actually importing the module here to avoid webpack errors
       // The actual import will happen in the methods that use it
       this.client = {}; // Placeholder until methods are called
+      console.log("GoogleAdsClient: Set up for server-side API calls");
     } catch (error) {
       console.error("GoogleAdsClient: Error initializing Google Ads API client", error);
       this.useMockData = true;
@@ -82,6 +91,7 @@ export class GoogleAdsClient {
       }
       
       // Dynamically import the Google Ads API only on the server side
+      console.log(`GoogleAdsClient: Dynamically importing Google Ads API for customer ${customerId}`);
       const { GoogleAdsApi } = await import('google-ads-api');
       
       const client = new GoogleAdsApi({
@@ -90,6 +100,7 @@ export class GoogleAdsClient {
         client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
       });
       
+      console.log(`GoogleAdsClient: Creating customer with refresh token (length: ${refreshToken?.length || 0})`);
       return client.Customer({
         customer_id: customerId,
         refresh_token: refreshToken,
@@ -109,22 +120,37 @@ export class GoogleAdsClient {
       
       console.log("GoogleAdsClient: Getting accessible customers with refresh token");
       console.log("GoogleAdsClient: Refresh token length:", refreshToken?.length || 0);
+      console.log("GoogleAdsClient: Refresh token first 10 chars:", refreshToken?.substring(0, 10) || 'none');
       
       // Dynamically import the Google Ads API only on the server side
+      console.log("GoogleAdsClient: Dynamically importing Google Ads API");
       const { GoogleAdsApi } = await import('google-ads-api');
       
+      // Get environment variables again to ensure they're available
+      const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "";
+      const clientId = process.env.GOOGLE_CLIENT_ID || "";
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+      
+      console.log("GoogleAdsClient: Creating GoogleAdsApi instance with:");
+      console.log(`- developer_token: ${developerToken.substring(0, 3)}...${developerToken.substring(developerToken.length - 3)} (${developerToken.length} chars)`);
+      console.log(`- client_id: ${clientId.substring(0, 3)}...${clientId.substring(clientId.length - 3)} (${clientId.length} chars)`);
+      console.log(`- client_secret: ${clientSecret.substring(0, 3)}...${clientSecret.substring(clientSecret.length - 3)} (${clientSecret.length} chars)`);
+      
       const client = new GoogleAdsApi({
-        developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
-        client_id: process.env.GOOGLE_CLIENT_ID || "",
-        client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+        developer_token: developerToken,
+        client_id: clientId,
+        client_secret: clientSecret,
       });
       
+      console.log("GoogleAdsClient: Calling listAccessibleCustomers with refresh token");
       const customers = await client.listAccessibleCustomers(refreshToken);
       console.log("GoogleAdsClient: API response type:", typeof customers);
       console.log("GoogleAdsClient: API response:", JSON.stringify(customers, null, 2));
       return customers;
     } catch (error) {
       console.error("GoogleAdsClient: Error fetching accessible customers:", error);
+      console.error("GoogleAdsClient: Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      
       // Add more detailed diagnostic info to the error
       const enhancedError = new Error(
         `Failed to fetch Google Ads accounts: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -142,6 +168,8 @@ export class GoogleAdsClient {
       
       // First get all accessible accounts
       console.log("GoogleAdsClient: Getting MCC accounts - starting");
+      console.log("GoogleAdsClient: Using refresh token:", refreshToken ? `Present (${refreshToken.length} chars)` : 'Missing');
+      
       const customersResponse = await this.getAccessibleCustomers(refreshToken);
       
       let customersList: string[] = [];
@@ -153,6 +181,7 @@ export class GoogleAdsClient {
       }
 
       console.log(`GoogleAdsClient: Processing ${customersList.length} accounts`);
+      console.log("GoogleAdsClient: Account resources:", customersList);
 
       // Try to identify MCC accounts by checking account hierarchy
       const formattedCustomers: CustomerAccount[] = [];
@@ -170,6 +199,7 @@ export class GoogleAdsClient {
         try {
           // Extract the customer ID from the resource name (format: "customers/12345678")
           const customerId = customerResource.split("/")[1];
+          console.log(`GoogleAdsClient: Processing customer ${customerId}`);
           
           // Create a customer instance to check if it's an MCC account
           // Note: in a real implementation, you would check account properties
@@ -279,7 +309,11 @@ export class GoogleAdsClient {
   }
 }
 
-// Always start with mock data
-const googleAdsClient = new GoogleAdsClient("", "", "");
+// Try to use real credentials but fall back to mock data
+const googleAdsClient = new GoogleAdsClient(
+  process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET
+);
 
 export default googleAdsClient; 

@@ -24,6 +24,14 @@ export async function GET() {
       );
     }
     
+    // Log session details for debugging
+    console.log("API route: Session info:");
+    console.log("- User:", session.user?.name || "Unknown");
+    console.log("- Email:", session.user?.email || "Unknown");
+    console.log("- AccessToken:", session.accessToken ? "Present" : "Missing");
+    console.log("- RefreshToken:", session.refreshToken ? "Present" : "Missing");
+    console.log("- ExpiresAt:", session.expiresAt || "Unknown");
+    
     if (!session.refreshToken) {
       console.log("API route: No refresh token in session");
       return NextResponse.json(
@@ -43,6 +51,7 @@ export async function GET() {
       console.log("API route: Calling getMCCAccounts");
       const accounts = await googleAdsClient.getMCCAccounts(session.refreshToken);
       console.log(`API route: Found ${accounts.length} accounts`);
+      console.log("API route: First few accounts:", accounts.slice(0, 3));
       
       return NextResponse.json({ 
         accounts: accounts,
@@ -50,6 +59,10 @@ export async function GET() {
       });
     } catch (adError: any) {
       console.error("API route: Error in Google Ads API call:", adError);
+      console.error("API route: Error details:", adError.message);
+      if (adError.stack) {
+        console.error("API route: Error stack:", adError.stack);
+      }
       
       // If getMCCAccounts fails, fallback to the original implementation
       console.log("API route: Falling back to getAccessibleCustomers");
@@ -68,6 +81,7 @@ export async function GET() {
         }
 
         console.log(`API route: Found ${customersList.length} customers via fallback`);
+        console.log("API route: customersList:", customersList);
 
         // Format the customer IDs for the frontend
         const formattedCustomers = customersList.map((customerResource: string) => {
@@ -91,6 +105,8 @@ export async function GET() {
         };
         
         console.error("API route: Both API methods failed:", errorDetail);
+        console.error("API route: Original error:", adError);
+        console.error("API route: Fallback error:", fallbackError);
         
         return NextResponse.json(
           { 

@@ -2,6 +2,11 @@
 
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
+import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button, useDisclosure, Spinner, Checkbox } from "@nextui-org/react";
+import { ChevronDown, RefreshCcw } from 'lucide-react';
+import { AccountSelectorModal } from '@/components/accounts/AccountSelectorModal';
+import { useSession } from 'next-auth/react';
+import { toast } from 'sonner';
 
 // We're explicitly creating a client-side version of mock accounts
 // instead of importing directly from googleAds.ts which is now server-only
@@ -52,68 +57,72 @@ interface ApiError {
 }
 
 export function AccountSelector({ value, onChange, error }: AccountSelectorProps) {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: session } = useSession();
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  
+  const [selectedAccount, setSelectedAccount] = useState<Customer | null>(null);
+  const [accounts, setAccounts] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedMCC, setSelectedMCC] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [useMockData, setUseMockData] = useState(false);
+  const [useMockData, setUseMockData] = useState(true);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    async function fetchCustomers() {
-      try {
-        setLoading(true);
-        setFetchError(null);
-        setDebugInfo(null);
+  const fetchCustomers = async () => {
+    try {
+      setIsLoading(true);
+      setFetchError(null);
+      setDebugInfo(null);
 
-        // Set a timeout for the API call
-        timeoutRef.current = setTimeout(() => {
-          console.error("Account selector: API call timeout after 10 seconds");
-          setFetchError("Request timed out. The Google Ads API might be unavailable.");
-          setLoading(false);
-        }, 10000);
+      // Set a timeout for the API call
+      timeoutRef.current = setTimeout(() => {
+        console.error("Account selector: API call timeout after 10 seconds");
+        setFetchError("Request timed out. The Google Ads API might be unavailable.");
+        setIsLoading(false);
+      }, 10000);
 
-        console.log("Account selector: Fetching accounts");
-        const response = await axios.get("/api/google-ads/accounts");
-        
-        // Clear timeout since we got a response
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-        
-        console.log("Account selector: API response:", response.data);
-        
-        // Handle both accounts and customers property names for backward compatibility
-        const accountData = response.data.accounts || response.data.customers || [];
-        setCustomers(accountData);
-      } catch (err: unknown) {
-        // Clear timeout if there was an error
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-        
-        console.error("Account selector: Error fetching accounts:", err);
-        const apiError = err as ApiError;
-        const errorMessage = apiError.response?.data?.error || apiError.message || "Failed to fetch Google Ads accounts";
-        setFetchError(errorMessage);
-        
-        // Save the debug info
-        setDebugInfo({
-          error: apiError.response?.data || apiError,
-          timestamp: new Date().toISOString()
-        });
-      } finally {
-        setLoading(false);
+      console.log("Account selector: Fetching accounts");
+      const response = await axios.get("/api/google-ads/accounts");
+      
+      // Clear timeout since we got a response
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
       }
+      
+      console.log("Account selector: API response:", response.data);
+      
+      // Handle both accounts and customers property names for backward compatibility
+      const accountData = response.data.accounts || response.data.customers || [];
+      setAccounts(accountData);
+    } catch (err: unknown) {
+      // Clear timeout if there was an error
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      
+      console.error("Account selector: Error fetching accounts:", err);
+      const apiError = err as ApiError;
+      const errorMessage = apiError.response?.data?.error || apiError.message || "Failed to fetch Google Ads accounts";
+      setFetchError(errorMessage);
+      
+      // Save the debug info
+      setDebugInfo({
+        error: apiError.response?.data || apiError,
+        timestamp: new Date().toISOString()
+      });
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    if (!useMockData) {
+  useEffect(() => {
+    if (session && !useMockData) {
       fetchCustomers();
     } else {
       // Use mock data instead
-      setCustomers(MOCK_CUSTOMER_ACCOUNTS);
-      setLoading(false);
+      setAccounts(MOCK_CUSTOMER_ACCOUNTS);
+      setIsLoading(false);
     }
 
     // Cleanup timeout if component unmounts
@@ -122,19 +131,31 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [useMockData]);
+  }, [session, useMockData]);
+
+  useEffect(() => {
+    if (selectedAccount) {
+      onChange(selectedAccount.id);
+    }
+  }, [selectedAccount, onChange]);
 
   // Get list of MCC accounts
-  const mccAccounts = customers.filter(customer => customer.isMCC === true);
+  const mccAccounts = accounts.filter(customer => customer.isMCC === true);
   
   // Get regular accounts, filtered by selected MCC if applicable
-  const regularAccounts = customers.filter(customer => {
+  const regularAccounts = accounts.filter(customer => {
     if (customer.isMCC) return false;
     if (selectedMCC) return customer.parentId === selectedMCC;
     return true;
   });
 
-  if (loading) {
+  const handleRefresh = () => {
+    if (session && !useMockData) {
+      fetchCustomers();
+    }
+  };
+
+  if (isLoading) {
     return (
       <div className="space-y-2">
         <div className="animate-pulse flex space-x-4">
@@ -183,7 +204,7 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
     );
   }
 
-  if (customers.length === 0) {
+  if (accounts.length === 0) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
         <div className="flex">
@@ -229,7 +250,7 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
             onChange={(e) => {
               setSelectedMCC(e.target.value || null);
               // Clear the current account selection if MCC changes
-              onChange("");
+              setSelectedAccount(null);
             }}
           >
             <option value="">All Accounts</option>
@@ -242,54 +263,96 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
         </div>
       )}
 
-      <div>
-        <label htmlFor="account" className="block text-sm font-medium text-gray-700">
-          Google Ads Account
-        </label>
-        <select
-          id="account"
-          name="account"
-          className={`mt-1 block w-full pl-3 pr-10 py-2 text-base focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md ${
-            error ? "border-red-300" : "border-gray-300"
-          }`}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          <option value="">Select an account</option>
-          {regularAccounts.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.displayName || `Account: ${customer.id}`}
-            </option>
-          ))}
-        </select>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        
-        {!useMockData && (
-          <div className="mt-2 text-right">
-            <button
-              onClick={() => setUseMockData(true)}
-              className="text-xs text-gray-500 hover:text-blue-500"
-            >
-              Switch to sample data
-            </button>
-          </div>
-        )}
-        
-        {useMockData && (
-          <div className="mt-2 text-right">
-            <button
-              onClick={() => {
-                setUseMockData(false);
-                setSelectedMCC(null);
-                onChange("");
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-row gap-2 items-center">
+          <Dropdown>
+            <DropdownTrigger>
+              <Button 
+                variant="flat" 
+                className="justify-between min-w-[240px]"
+                endContent={<ChevronDown size={16} />}
+                isDisabled={isLoading}
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Spinner size="sm" /> 
+                    <span>Loading accounts...</span>
+                  </div>
+                ) : selectedAccount ? (
+                  selectedAccount.displayName || `Account ${selectedAccount.id}`
+                ) : (
+                  'Select an account'
+                )}
+              </Button>
+            </DropdownTrigger>
+            <DropdownMenu 
+              aria-label="Google Ads Accounts"
+              variant="flat"
+              onAction={(key) => {
+                if (key === "view_all") {
+                  onOpen();
+                } else {
+                  const account = accounts.find(acc => acc.id === key);
+                  if (account) {
+                    setSelectedAccount(account);
+                  }
+                }
               }}
-              className="text-xs text-gray-500 hover:text-blue-500"
             >
-              Try real accounts
-            </button>
+              {accounts.length > 0 ? (
+                <>
+                  {accounts.slice(0, 5).map((account) => (
+                    <DropdownItem key={account.id}>
+                      {account.displayName || `Account ${account.id}`}
+                      {account.isMCC && <span className="ml-2 text-xs bg-blue-100 px-1 rounded">MCC</span>}
+                    </DropdownItem>
+                  ))}
+                  {accounts.length > 5 && (
+                    <DropdownItem key="view_all" className="text-primary">View all accounts</DropdownItem>
+                  )}
+                </>
+              ) : (
+                <DropdownItem key="no_accounts" isDisabled>No accounts found</DropdownItem>
+              )}
+            </DropdownMenu>
+          </Dropdown>
+          
+          <Button 
+            isIconOnly 
+            variant="light" 
+            onClick={handleRefresh}
+            isDisabled={isLoading}
+          >
+            <RefreshCcw size={16} />
+          </Button>
+          
+          <div className="flex items-center ml-4">
+            <Checkbox 
+              isSelected={!useMockData} 
+              onValueChange={(isSelected) => setUseMockData(!isSelected)}
+              size="sm"
+            >
+              Use real API data
+            </Checkbox>
+          </div>
+        </div>
+        
+        {error && (
+          <div className="text-sm text-danger mt-1">
+            {error}
           </div>
         )}
       </div>
+      
+      <AccountSelectorModal 
+        isOpen={isOpen} 
+        onOpenChange={onOpenChange}
+        accounts={accounts}
+        onSelectAccount={(account: Customer) => {
+          setSelectedAccount(account);
+          onOpenChange();
+        }}
+      />
     </div>
   );
 } 

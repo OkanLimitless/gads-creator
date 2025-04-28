@@ -669,19 +669,105 @@ export class GoogleAdsClient {
     }
   }
 
-  async getSubAccounts(mccId: string): Promise<CustomerAccount[]> {
+  async getSubAccounts(mccId: string, refreshToken: string): Promise<CustomerAccount[]> {
     try {
       if (this.useMockData) {
         console.log(`GoogleAdsClient (MOCK): Getting sub-accounts for MCC ID ${mccId}`);
         return MOCK_CUSTOMER_ACCOUNTS.filter(acc => acc.parentId === mccId);
       }
       
-      // In a real implementation, you would query the API to get sub-accounts under this MCC
-      // For now, this is a placeholder that returns an empty array
       console.log(`GoogleAdsClient: Getting sub-accounts for MCC ID: ${mccId}`);
       
-      // Placeholder for real implementation
-      return [];
+      // Dynamically import the Google Ads API
+      const { GoogleAdsApi } = await import('google-ads-api');
+      
+      const client = new GoogleAdsApi({
+        developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+        client_id: process.env.GOOGLE_CLIENT_ID || "",
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+      });
+      
+      // Create a customer instance using the MCC account ID
+      const customer = client.Customer({
+        customer_id: mccId,
+        refresh_token: refreshToken,
+      });
+
+      // Fetch all accessible customers for the MCC account
+      const accessibleCustomers = await this.getAccessibleCustomers(refreshToken);
+      let customersList: string[] = [];
+      
+      if (accessibleCustomers && typeof accessibleCustomers === 'object' && 'resourceNames' in accessibleCustomers) {
+        customersList = accessibleCustomers.resourceNames as string[];
+      } else if (Array.isArray(accessibleCustomers)) {
+        customersList = accessibleCustomers;
+      }
+      
+      // We need to query each account to get their details
+      const subAccounts: CustomerAccount[] = [];
+      
+      for (const customerResource of customersList) {
+        try {
+          const customerId = customerResource.split("/")[1];
+          
+          // Skip the MCC account itself
+          if (customerId === mccId) continue;
+          
+          // Query account details using GAQL
+          const query = `
+            SELECT
+              customer.id,
+              customer.descriptive_name,
+              customer.manager
+            FROM
+              customer
+            WHERE
+              customer.id = ${customerId}
+          `;
+          
+          try {
+            const response = await customer.query(query);
+            
+            if (response && response.length > 0 && response[0].customer) {
+              const accountInfo = response[0].customer;
+              
+              subAccounts.push({
+                id: customerId,
+                resourceName: customerResource,
+                displayName: accountInfo.descriptive_name || `Account ${customerId}`,
+                isMCC: accountInfo.manager || false,
+                parentId: mccId
+              });
+            } else {
+              // If the detailed query fails, still include the account with basic info
+              subAccounts.push({
+                id: customerId,
+                resourceName: customerResource,
+                displayName: `Account ${customerId}`,
+                isMCC: false,
+                parentId: mccId
+              });
+            }
+          } catch (queryError) {
+            console.error(`GoogleAdsClient: Error querying details for account ${customerId}:`, queryError);
+            
+            // Still include the account with basic info
+            subAccounts.push({
+              id: customerId,
+              resourceName: customerResource,
+              displayName: `Account ${customerId}`,
+              isMCC: false,
+              parentId: mccId
+            });
+          }
+        } catch (err) {
+          console.error(`GoogleAdsClient: Error processing customer ${customerResource}:`, err);
+          // Continue with next customer
+        }
+      }
+      
+      console.log(`GoogleAdsClient: Found ${subAccounts.length} sub-accounts for MCC ${mccId}`);
+      return subAccounts;
     } catch (error) {
       console.error(`GoogleAdsClient: Error fetching sub-accounts for MCC ${mccId}:`, error);
       throw error;

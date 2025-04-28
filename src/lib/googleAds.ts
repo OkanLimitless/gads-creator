@@ -22,6 +22,129 @@ logger.info('Initializing Google Ads client', {
   timeout: TIMEOUT_MS
 });
 
+// Add direct fetch implementation for OAuth token validation - this will help diagnose the issue
+async function validateRefreshToken(refreshToken: string): Promise<boolean> {
+  try {
+    // Try a simple Google API call to validate the token
+    const clientId = process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+    
+    console.log("Direct OAuth: Testing refresh token validity");
+    
+    // Get an access token from the refresh token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }).toString(),
+      // Use explicit timeout
+      signal: AbortSignal.timeout(10000),
+    });
+    
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error("Direct OAuth: Failed to validate refresh token:", errorText);
+      return false;
+    }
+    
+    const tokenData = await tokenResponse.json();
+    console.log("Direct OAuth: Successfully obtained access token");
+    
+    // Now test the access token against a simple Google API
+    const validationResponse = await fetch(
+      'https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + tokenData.access_token,
+      {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+    
+    if (!validationResponse.ok) {
+      console.error("Direct OAuth: Access token validation failed");
+      return false;
+    }
+    
+    const validationData = await validationResponse.json();
+    console.log("Direct OAuth: Token validation success, scopes:", validationData.scope);
+    
+    // Check if the token has the required scope for Google Ads API
+    const hasAdsScope = validationData.scope.includes('https://www.googleapis.com/auth/adwords');
+    if (!hasAdsScope) {
+      console.error("Direct OAuth: Token lacks Google Ads API scope");
+    }
+    
+    return hasAdsScope;
+  } catch (error) {
+    console.error("Direct OAuth: Error validating refresh token:", error);
+    return false;
+  }
+}
+
+// Add direct implementation to get accounts using Google Ads API REST endpoint
+async function getAccountsDirectRestApi(refreshToken: string): Promise<any> {
+  try {
+    console.log("Direct REST: Starting direct REST implementation");
+    
+    // First get an access token
+    const clientId = process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+    const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "";
+    
+    // Step 1: Get access token from refresh token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }).toString(),
+      signal: AbortSignal.timeout(10000),
+    });
+    
+    if (!tokenResponse.ok) {
+      throw new Error(`Failed to get access token: ${await tokenResponse.text()}`);
+    }
+    
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+    console.log("Direct REST: Access token obtained");
+    
+    // Step 2: Call the Google Ads API REST accessible customers endpoint
+    const apiResponse = await fetch('https://googleads.googleapis.com/v15/customers:listAccessibleCustomers', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'developer-token': developerToken,
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    
+    if (!apiResponse.ok) {
+      const errorText = await apiResponse.text();
+      console.error("Direct REST: API call failed:", errorText);
+      throw new Error(`Google Ads API call failed: ${errorText}`);
+    }
+    
+    const apiData = await apiResponse.json();
+    console.log("Direct REST: API call succeeded:", JSON.stringify(apiData));
+    
+    return apiData;
+  } catch (error) {
+    console.error("Direct REST: Error in direct REST implementation:", error);
+    throw error;
+  }
+}
+
 export interface CreateCampaignParams {
   customerId: string;
   name: string;
@@ -160,6 +283,45 @@ export class GoogleAdsClient {
         length: refreshToken?.length || 0,
         firstChars: refreshToken?.substring(0, 10) || 'none'
       });
+      
+      // First validate the refresh token
+      const isTokenValid = await validateRefreshToken(refreshToken);
+      if (!isTokenValid) {
+        diagnosticTracer.addTrace("googleAds", "Refresh token validation failed");
+        sessionLogger.error('Refresh token validation failed');
+        throw new Error("Refresh token validation failed");
+      }
+      
+      // Try our direct implementation first as it's likely more reliable
+      try {
+        console.log("GoogleAdsClient: Trying direct REST implementation");
+        sessionLogger.info('Trying direct REST implementation');
+        
+        const directResult = await createTimeoutPromise(
+          getAccountsDirectRestApi(refreshToken),
+          30000,
+          "Direct REST implementation timed out"
+        );
+        
+        console.log("GoogleAdsClient: Direct REST implementation succeeded");
+        sessionLogger.info('Direct REST implementation succeeded');
+        
+        // End diagnostic tracing
+        diagnosticTracer.end();
+        logSession.end('success', { 
+          method: 'directRest',
+          responseType: typeof directResult
+        });
+        
+        return directResult;
+      } catch (directError) {
+        console.error("GoogleAdsClient: Direct REST implementation failed:", directError);
+        sessionLogger.error('Direct REST implementation failed', {
+          error: formatError(directError)
+        });
+        
+        // Fall back to the library implementation
+      }
       
       // Dynamically import the Google Ads API only on the server side
       console.log("GoogleAdsClient: Dynamically importing Google Ads API");
@@ -360,20 +522,49 @@ export class GoogleAdsClient {
         return MOCK_CUSTOMER_ACCOUNTS;
       }
       
-      // First get all accessible accounts
+      // First validate the token
+      const isTokenValid = await validateRefreshToken(refreshToken);
+      if (!isTokenValid) {
+        console.error("GoogleAdsClient: Refresh token validation failed in getMCCAccounts");
+        throw new Error("Refresh token validation failed");
+      }
+      
+      // Try our direct REST implementation first
+      try {
+        console.log("GoogleAdsClient: Trying direct REST in getMCCAccounts");
+        const directResult = await getAccountsDirectRestApi(refreshToken);
+        
+        if (directResult && directResult.resourceNames && Array.isArray(directResult.resourceNames)) {
+          console.log(`GoogleAdsClient: Direct REST implementation found ${directResult.resourceNames.length} accounts`);
+          
+          // Format accounts into our standard format
+          const formattedAccounts = directResult.resourceNames.map((resourceName: string) => {
+            const customerId = resourceName.split('/')[1];
+            return {
+              id: customerId,
+              resourceName: resourceName,
+              displayName: `Account ${customerId}`,
+              isMCC: false // We can't determine this from the basic API call
+            };
+          });
+          
+          return formattedAccounts;
+        }
+      } catch (directError) {
+        console.error("GoogleAdsClient: Direct REST implementation failed in getMCCAccounts:", directError);
+      }
+      
+      // Fall back to the original implementation
       console.log("GoogleAdsClient: Getting MCC accounts - starting");
       console.log("GoogleAdsClient: Using refresh token:", refreshToken ? `Present (${refreshToken.length} chars)` : 'Missing');
       
       const customersResponse = await this.getAccessibleCustomers(refreshToken);
       
-      // The response format isn't well typed in the library, so we check and handle it appropriately
       let customersList: string[] = [];
       
       if (customersResponse && typeof customersResponse === 'object' && 'resourceNames' in customersResponse) {
-        // Handle the case where it returns { resourceNames: string[] }
         customersList = customersResponse.resourceNames as string[];
       } else if (Array.isArray(customersResponse)) {
-        // Handle the case where it returns string[]
         customersList = customersResponse;
       }
 

@@ -2,7 +2,30 @@
 
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
-import { MOCK_CUSTOMER_ACCOUNTS } from "@/lib/googleAds";
+
+// We're explicitly creating a client-side version of mock accounts
+// instead of importing directly from googleAds.ts which is now server-only
+const MOCK_CUSTOMER_ACCOUNTS = [
+  {
+    id: "1234567890",
+    resourceName: "customers/1234567890",
+    displayName: "Test Account 1",
+    isMCC: false
+  },
+  {
+    id: "9876543210",
+    resourceName: "customers/9876543210",
+    displayName: "Test MCC Account",
+    isMCC: true
+  },
+  {
+    id: "5555555555",
+    resourceName: "customers/5555555555",
+    displayName: "Sub Account 1",
+    isMCC: false,
+    parentId: "9876543210"
+  }
+];
 
 interface Customer {
   id: string;

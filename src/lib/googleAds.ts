@@ -1,4 +1,8 @@
-import { GoogleAdsApi } from "google-ads-api";
+// Mark this file as server-only to prevent client-side importing
+import 'server-only';
+
+// We will dynamically import the GoogleAdsApi to prevent it from being included in client bundles
+// This is necessary because the google-ads-api package uses Node.js specific modules
 
 export interface CreateCampaignParams {
   customerId: string;
@@ -41,31 +45,32 @@ export const MOCK_CUSTOMER_ACCOUNTS: CustomerAccount[] = [
 ];
 
 export class GoogleAdsClient {
-  private client: GoogleAdsApi;
+  private client: any;
   private useMockData: boolean = false;
 
   constructor(developerToken: string, clientId?: string, clientSecret?: string) {
-    // Enable mock mode if credentials are missing
+    // Enable mock mode if credentials are missing or we're not in a Node.js environment
     const hasValidCredentials = developerToken && developerToken.length > 10 && 
                                clientId && clientId.length > 10 && 
                                clientSecret && clientSecret.length > 10;
     
-    this.useMockData = !hasValidCredentials;
+    // Always use mock data on the client side or if credentials are missing
+    this.useMockData = !hasValidCredentials || typeof window !== 'undefined';
     
     if (this.useMockData) {
-      console.warn("GoogleAdsClient: Missing or invalid credentials. Using mock data mode.");
+      console.warn("GoogleAdsClient: Using mock data mode.");
+      this.client = null;
+      return;
     }
     
     try {
-      this.client = new GoogleAdsApi({
-        developer_token: developerToken || "mock_token",
-        client_id: clientId || "mock_client_id",
-        client_secret: clientSecret || "mock_client_secret",
-      });
+      // We're not actually importing the module here to avoid webpack errors
+      // The actual import will happen in the methods that use it
+      this.client = {}; // Placeholder until methods are called
     } catch (error) {
       console.error("GoogleAdsClient: Error initializing Google Ads API client", error);
       this.useMockData = true;
-      this.client = {} as GoogleAdsApi; // Empty object as a fallback
+      this.client = null;
     }
   }
 
@@ -76,7 +81,16 @@ export class GoogleAdsClient {
         return { customer_id: customerId };
       }
       
-      return this.client.Customer({
+      // Dynamically import the Google Ads API only on the server side
+      const { GoogleAdsApi } = await import('google-ads-api');
+      
+      const client = new GoogleAdsApi({
+        developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+        client_id: process.env.GOOGLE_CLIENT_ID || "",
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+      });
+      
+      return client.Customer({
         customer_id: customerId,
         refresh_token: refreshToken,
       });
@@ -96,7 +110,16 @@ export class GoogleAdsClient {
       console.log("GoogleAdsClient: Getting accessible customers with refresh token");
       console.log("GoogleAdsClient: Refresh token length:", refreshToken?.length || 0);
       
-      const customers = await this.client.listAccessibleCustomers(refreshToken);
+      // Dynamically import the Google Ads API only on the server side
+      const { GoogleAdsApi } = await import('google-ads-api');
+      
+      const client = new GoogleAdsApi({
+        developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+        client_id: process.env.GOOGLE_CLIENT_ID || "",
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+      });
+      
+      const customers = await client.listAccessibleCustomers(refreshToken);
       console.log("GoogleAdsClient: API response type:", typeof customers);
       console.log("GoogleAdsClient: API response:", JSON.stringify(customers, null, 2));
       return customers;
@@ -134,6 +157,15 @@ export class GoogleAdsClient {
       // Try to identify MCC accounts by checking account hierarchy
       const formattedCustomers: CustomerAccount[] = [];
       
+      // Dynamically import the Google Ads API only on the server side
+      const { GoogleAdsApi } = await import('google-ads-api');
+      
+      const client = new GoogleAdsApi({
+        developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+        client_id: process.env.GOOGLE_CLIENT_ID || "",
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+      });
+      
       for (const customerResource of customersList) {
         try {
           // Extract the customer ID from the resource name (format: "customers/12345678")
@@ -142,7 +174,7 @@ export class GoogleAdsClient {
           // Create a customer instance to check if it's an MCC account
           // Note: in a real implementation, you would check account properties
           // to determine if it's an MCC account
-          this.client.Customer({
+          client.Customer({
             customer_id: customerId,
             refresh_token: refreshToken,
           });
@@ -205,8 +237,17 @@ export class GoogleAdsClient {
         };
       }
       
+      // Dynamically import the Google Ads API only on the server side
+      const { GoogleAdsApi } = await import('google-ads-api');
+      
+      const client = new GoogleAdsApi({
+        developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+        client_id: process.env.GOOGLE_CLIENT_ID || "",
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+      });
+      
       // Create the customer instance but don't need to assign it to a variable if unused
-      this.client.Customer({
+      client.Customer({
         customer_id: customerId,
         refresh_token: refreshToken,
       });
@@ -238,14 +279,7 @@ export class GoogleAdsClient {
   }
 }
 
-// Check if we're in a development environment
-const isDevelopment = process.env.NODE_ENV === "development";
-
-// Create a singleton instance
-const googleAdsClient = new GoogleAdsClient(
-  process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET
-);
+// Always start with mock data
+const googleAdsClient = new GoogleAdsClient("", "", "");
 
 export default googleAdsClient; 

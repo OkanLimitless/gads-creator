@@ -33,11 +33,30 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
     setError(null);
     
     try {
+      console.log(`AccountHierarchy: Fetching hierarchy for MCC ID ${mccId}`);
       const response = await axios.get(`/api/google-ads/accounts/hierarchy?mccId=${mccId}`);
       
+      console.log("AccountHierarchy: API response:", response.data);
       const { mccAccount, subAccounts } = response.data;
+      
+      if (!mccAccount) {
+        console.error("AccountHierarchy: No MCC account in the response");
+        setError("Failed to find MCC account details");
+        toast.error("Could not load MCC account details");
+        return;
+      }
+      
       setMccAccount(mccAccount);
       setSubAccounts(subAccounts || []);
+      
+      console.log(`AccountHierarchy: Found ${subAccounts?.length || 0} sub-accounts`);
+      
+      // Show toast notifications
+      if (subAccounts?.length > 0) {
+        toast.success(`Found ${subAccounts.length} sub-accounts for this MCC`);
+      } else {
+        toast.info("No sub-accounts found for this MCC");
+      }
     } catch (err: any) {
       console.error("Error fetching account hierarchy:", err);
       
@@ -146,6 +165,7 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                     >
                       <div className="px-2 py-1">
                         <p className="text-sm">Resource: {account.resourceName}</p>
+                        <p className="text-sm mt-1">Parent MCC: {account.parentId}</p>
                       </div>
                     </AccordionItem>
                   ))}

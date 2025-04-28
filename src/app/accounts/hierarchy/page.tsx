@@ -16,20 +16,44 @@ function AccountHierarchyPageContent() {
   
   const [mccId, setMccId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
+  const [debug, setDebug] = useState<boolean>(false);
 
   useEffect(() => {
     const mccIdFromUrl = searchParams.get("mccId");
+    const debugFromUrl = searchParams.get("debug") === "true";
+    
     if (mccIdFromUrl) {
+      console.log("Hierarchy page: Setting MCC ID from URL:", mccIdFromUrl);
       setMccId(mccIdFromUrl);
+      setAccountId(mccIdFromUrl);
     }
+    
+    setDebug(debugFromUrl);
   }, [searchParams]);
 
   // Handle account selection
   const handleAccountSelect = (id: string) => {
+    console.log("Hierarchy page: Account selected:", id);
     setAccountId(id);
+    setMccId(id);
+    
     // Update URL to include the selected mccId
     if (id) {
-      router.push(`/accounts/hierarchy?mccId=${id}`);
+      const newUrl = `/accounts/hierarchy?mccId=${id}${debug ? "&debug=true" : ""}`;
+      console.log("Hierarchy page: Updating URL to:", newUrl);
+      router.push(newUrl);
+    }
+  };
+
+  // Toggle debug mode
+  const toggleDebug = () => {
+    const newDebug = !debug;
+    setDebug(newDebug);
+    
+    if (mccId) {
+      router.push(`/accounts/hierarchy?mccId=${mccId}${newDebug ? "&debug=true" : ""}`);
+    } else {
+      router.push(`/accounts/hierarchy${newDebug ? "?debug=true" : ""}`);
     }
   };
 
@@ -75,12 +99,36 @@ function AccountHierarchyPageContent() {
       <div className="mb-6">
         <Card className="w-full">
           <CardBody>
-            <h2 className="text-lg font-semibold mb-4">Select MCC Account</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Select MCC Account</h2>
+              <Button 
+                variant="flat" 
+                size="sm" 
+                color={debug ? "warning" : "default"}
+                onClick={toggleDebug}
+              >
+                {debug ? "Debug Mode ON" : "Debug Mode"}
+              </Button>
+            </div>
             <AccountSelector 
               value={accountId || ""}
               onChange={handleAccountSelect}
               error={""}
             />
+            {debug && (
+              <div className="mt-4 p-3 bg-gray-100 rounded-md">
+                <h3 className="text-sm font-medium mb-2">Debug Info:</h3>
+                <pre className="text-xs whitespace-pre-wrap">
+                  {JSON.stringify({
+                    mccId,
+                    accountId,
+                    debug,
+                    sessionStatus: status,
+                    hasSession: !!session,
+                  }, null, 2)}
+                </pre>
+              </div>
+            )}
           </CardBody>
         </Card>
       </div>

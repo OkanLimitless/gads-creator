@@ -25,8 +25,11 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const mccId = url.searchParams.get('mccId');
     
+    console.log("API route: Processing request with mccId:", mccId);
+    
     // Check if mccId was provided
     if (!mccId) {
+      console.log("API route: Missing mccId parameter");
       return NextResponse.json(
         { error: "Missing mccId parameter" },
         { status: 400 }
@@ -75,10 +78,14 @@ export async function GET(request: Request) {
     
     try {
       // Get the MCC account details first
+      console.log("API route: Fetching MCC accounts");
       const mccAccounts = await googleAdsClient.getMCCAccounts(session.refreshToken);
+      console.log(`API route: Found ${mccAccounts.length} MCC accounts`);
+      
       const mccAccount = mccAccounts.find(acc => acc.id === mccId);
       
       if (!mccAccount) {
+        console.log(`API route: MCC account not found with ID ${mccId}`);
         return NextResponse.json(
           { 
             error: "MCC account not found",
@@ -89,8 +96,12 @@ export async function GET(request: Request) {
         );
       }
       
+      console.log(`API route: Found MCC account: ${mccAccount.displayName || mccAccount.id}`);
+      
       // Get sub-accounts for the MCC
+      console.log(`API route: Fetching sub-accounts for MCC ${mccId}`);
       const subAccounts = await googleAdsClient.getSubAccounts(mccId, session.refreshToken);
+      console.log(`API route: Found ${subAccounts.length} sub-accounts`);
       
       // Create the response data
       const responseData = { 
@@ -105,9 +116,12 @@ export async function GET(request: Request) {
         timestamp: now
       });
       
+      console.log("API route: Returning successful response");
       return NextResponse.json(responseData);
     } catch (error: any) {
       // API call failed
+      console.error("API route: API method failed:", error);
+      
       const errorDetail: DetailedError = {
         message: `Failed to fetch sub-accounts for MCC ${mccId}`,
         details: error.message || "Unknown error in API call",

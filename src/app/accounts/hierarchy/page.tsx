@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AccountHierarchy } from "@/components/accounts/AccountHierarchy";
@@ -9,7 +9,7 @@ import { Card, CardBody, Spinner, Button } from "@nextui-org/react";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
-export default function AccountHierarchyPage() {
+function AccountHierarchyPageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -98,5 +98,17 @@ export default function AccountHierarchyPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function AccountHierarchyPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center min-h-screen">
+        <Spinner size="lg" label="Loading..." />
+      </div>
+    }>
+      <AccountHierarchyPageContent />
+    </Suspense>
   );
 } 

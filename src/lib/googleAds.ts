@@ -134,8 +134,8 @@ async function getAccountsDirectRestApi(refreshToken: string): Promise<any> {
     console.log("Direct REST: Access token obtained");
     
     // Step 2: Call the Google Ads API REST accessible customers endpoint
-    // Correct endpoint URL according to https://developers.google.com/google-ads/api/rest/reference/rest/v16/customers/listAccessibleCustomers
-    const apiUrl = 'https://googleads.googleapis.com/v16/customers:listAccessibleCustomers';
+    // Correct endpoint URL according to https://developers.google.com/google-ads/api/rest/reference/rest/v19/customers/listAccessibleCustomers
+    const apiUrl = 'https://googleads.googleapis.com/v19/customers:listAccessibleCustomers';
     console.log("Direct REST: Calling API endpoint:", apiUrl);
     
     // Step 3: Make the API call with proper headers

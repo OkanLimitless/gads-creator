@@ -7,6 +7,7 @@ import { ChevronDown, RefreshCcw } from 'lucide-react';
 import { AccountSelectorModal } from '@/components/accounts/AccountSelectorModal';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
+import { DiagnosticErrorDisplay } from '@/components/ui/DiagnosticErrorDisplay';
 
 // We're explicitly creating a client-side version of mock accounts
 // instead of importing directly from googleAds.ts which is now server-only
@@ -51,6 +52,9 @@ interface ApiError {
     data?: {
       error?: string;
       details?: string;
+      code?: string;
+      timestamp?: string;
+      diagnosticReport?: any;
     };
   };
   message?: string;
@@ -78,7 +82,7 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
       // Set a timeout for the API call
       timeoutRef.current = setTimeout(() => {
         console.error("Account selector: API call timeout after 10 seconds");
-        setFetchError("Request timed out. The Google Ads API might be unavailable.");
+        setFetchError("Request timed out. The Google Ads API might be unavailable or the refresh token might have expired.");
         setIsLoading(false);
       }, 10000);
 
@@ -103,13 +107,18 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
       
       console.error("Account selector: Error fetching accounts:", err);
       const apiError = err as ApiError;
-      const errorMessage = apiError.response?.data?.error || apiError.message || "Failed to fetch Google Ads accounts";
+      
+      // Extract error message and diagnostic info
+      const errorResponse = apiError.response?.data;
+      const errorMessage = errorResponse?.error || apiError.message || "Failed to fetch Google Ads accounts";
+      
       setFetchError(errorMessage);
       
-      // Save the debug info
+      // Save the enhanced debug info including diagnostic report if available
       setDebugInfo({
-        error: apiError.response?.data || apiError,
-        timestamp: new Date().toISOString()
+        error: errorResponse || apiError,
+        timestamp: errorResponse?.timestamp || new Date().toISOString(),
+        diagnosticReport: errorResponse?.diagnosticReport
       });
     } finally {
       setIsLoading(false);
@@ -175,32 +184,15 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
 
   if (fetchError) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
-        <div className="flex">
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">Error loading accounts</h3>
-            <div className="mt-2 text-sm text-red-700">{fetchError}</div>
-            
-            {debugInfo && (
-              <details className="mt-2">
-                <summary className="text-xs text-blue-500 cursor-pointer">Technical Details</summary>
-                <pre className="mt-2 text-xs bg-red-50 p-2 rounded overflow-auto max-h-40">
-                  {JSON.stringify(debugInfo, null, 2)}
-                </pre>
-              </details>
-            )}
-            
-            <div className="mt-3">
-              <button
-                onClick={() => setUseMockData(true)}
-                className="text-sm text-blue-500 underline"
-              >
-                Use sample data instead
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <DiagnosticErrorDisplay
+        error={fetchError}
+        details={debugInfo?.error?.details}
+        code={debugInfo?.error?.code}
+        timestamp={debugInfo?.timestamp}
+        diagnosticReport={debugInfo?.diagnosticReport}
+        onRetry={handleRefresh}
+        onUseSampleData={() => setUseMockData(true)}
+      />
     );
   }
 

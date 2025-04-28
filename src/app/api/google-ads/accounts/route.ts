@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import googleAdsClient from "@/lib/googleAds";
+import { formatError } from "@/lib/diagnostics";
 
 interface DetailedError {
   message: string;
   details?: string;
   code?: string;
   timestamp: string;
+  diagnosticReport?: any;
 }
 
 export async function GET() {
@@ -64,6 +66,9 @@ export async function GET() {
         console.error("API route: Error stack:", adError.stack);
       }
       
+      // Capture diagnostic report if available
+      const diagnosticReport = adError.diagnosticReport || null;
+      
       // If getMCCAccounts fails, fallback to the original implementation
       console.log("API route: Falling back to getAccessibleCustomers");
       try {
@@ -97,11 +102,14 @@ export async function GET() {
         return NextResponse.json({ customers: formattedCustomers });
       } catch (fallbackError: any) {
         // Both methods failed, return a detailed error
+        const fallbackDiagnosticReport = fallbackError.diagnosticReport || null;
+        
         const errorDetail: DetailedError = {
           message: "Failed to fetch Google Ads accounts after multiple attempts",
           details: fallbackError.message || "Unknown error in fallback method",
-          code: "GOOGLE_ADS_API_ERROR",
-          timestamp: new Date().toISOString()
+          code: fallbackError.code || "GOOGLE_ADS_API_ERROR",
+          timestamp: new Date().toISOString(),
+          diagnosticReport: fallbackDiagnosticReport || diagnosticReport
         };
         
         console.error("API route: Both API methods failed:", errorDetail);
@@ -114,7 +122,8 @@ export async function GET() {
             details: errorDetail.details,
             code: errorDetail.code,
             timestamp: errorDetail.timestamp,
-            originalError: adError.message || "Unknown primary error", 
+            diagnosticReport: errorDetail.diagnosticReport,
+            originalError: adError.message || "Unknown primary error",
           },
           { status: 500 }
         );
@@ -122,17 +131,19 @@ export async function GET() {
     }
   } catch (error: unknown) {
     const timestamp = new Date().toISOString();
+    const formattedError = formatError(error);
     const errorMessage = error instanceof Error ? error.message : "Failed to fetch Google Ads accounts";
-    const errorStack = error instanceof Error ? error.stack : undefined;
     
-    console.error("API route: Unhandled error:", errorMessage, errorStack);
+    console.error("API route: Unhandled error:", errorMessage);
+    console.error("API route: Formatted error:", JSON.stringify(formattedError, null, 2));
     
     return NextResponse.json(
       { 
         error: errorMessage,
-        details: errorStack,
+        details: "An unexpected error occurred while processing your request",
         code: "SERVER_ERROR",
-        timestamp
+        timestamp,
+        debug: formattedError
       },
       { status: 500 }
     );

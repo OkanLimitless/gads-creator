@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
+import { MOCK_CUSTOMER_ACCOUNTS } from "@/lib/googleAds";
 
 interface Customer {
   id: string;
@@ -21,6 +22,7 @@ interface ApiError {
   response?: {
     data?: {
       error?: string;
+      details?: string;
     };
   };
   message?: string;
@@ -31,29 +33,73 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedMCC, setSelectedMCC] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [useMockData, setUseMockData] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     async function fetchCustomers() {
       try {
         setLoading(true);
-        console.log("Fetching accounts for selector");
+        setFetchError(null);
+        setDebugInfo(null);
+
+        // Set a timeout for the API call
+        timeoutRef.current = setTimeout(() => {
+          console.error("Account selector: API call timeout after 10 seconds");
+          setFetchError("Request timed out. The Google Ads API might be unavailable.");
+          setLoading(false);
+        }, 10000);
+
+        console.log("Account selector: Fetching accounts");
         const response = await axios.get("/api/google-ads/accounts");
-        console.log("Account selector API response:", response.data);
+        
+        // Clear timeout since we got a response
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        
+        console.log("Account selector: API response:", response.data);
         
         // Handle both accounts and customers property names for backward compatibility
         const accountData = response.data.accounts || response.data.customers || [];
         setCustomers(accountData);
       } catch (err: unknown) {
-        console.error("Error fetching customers:", err);
+        // Clear timeout if there was an error
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        
+        console.error("Account selector: Error fetching accounts:", err);
         const apiError = err as ApiError;
-        setFetchError(apiError.response?.data?.error || apiError.message || "Failed to fetch Google Ads accounts");
+        const errorMessage = apiError.response?.data?.error || apiError.message || "Failed to fetch Google Ads accounts";
+        setFetchError(errorMessage);
+        
+        // Save the debug info
+        setDebugInfo({
+          error: apiError.response?.data || apiError,
+          timestamp: new Date().toISOString()
+        });
       } finally {
         setLoading(false);
       }
     }
 
-    fetchCustomers();
-  }, []);
+    if (!useMockData) {
+      fetchCustomers();
+    } else {
+      // Use mock data instead
+      setCustomers(MOCK_CUSTOMER_ACCOUNTS);
+      setLoading(false);
+    }
+
+    // Cleanup timeout if component unmounts
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [useMockData]);
 
   // Get list of MCC accounts
   const mccAccounts = customers.filter(customer => customer.isMCC === true);
@@ -67,10 +113,18 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
 
   if (loading) {
     return (
-      <div className="animate-pulse flex space-x-4">
-        <div className="flex-1 space-y-2 py-1">
-          <div className="h-10 bg-gray-200 rounded"></div>
+      <div className="space-y-2">
+        <div className="animate-pulse flex space-x-4">
+          <div className="flex-1 space-y-2 py-1">
+            <div className="h-10 bg-gray-200 rounded"></div>
+          </div>
         </div>
+        <div className="animate-pulse flex space-x-4">
+          <div className="flex-1 space-y-2 py-1">
+            <div className="h-10 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 text-center">Loading account information...</p>
       </div>
     );
   }
@@ -82,6 +136,24 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
           <div className="ml-3">
             <h3 className="text-sm font-medium text-red-800">Error loading accounts</h3>
             <div className="mt-2 text-sm text-red-700">{fetchError}</div>
+            
+            {debugInfo && (
+              <details className="mt-2">
+                <summary className="text-xs text-blue-500 cursor-pointer">Technical Details</summary>
+                <pre className="mt-2 text-xs bg-red-50 p-2 rounded overflow-auto max-h-40">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              </details>
+            )}
+            
+            <div className="mt-3">
+              <button
+                onClick={() => setUseMockData(true)}
+                className="text-sm text-blue-500 underline"
+              >
+                Use sample data instead
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -97,6 +169,14 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
             <div className="mt-2 text-sm text-yellow-700">
               No Google Ads accounts were found. Make sure you have granted the necessary permissions.
             </div>
+            <div className="mt-3">
+              <button
+                onClick={() => setUseMockData(true)}
+                className="text-sm text-blue-500 underline"
+              >
+                Use sample data instead
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -105,6 +185,14 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
 
   return (
     <div className="space-y-4">
+      {useMockData && (
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-2 mb-4">
+          <p className="text-xs text-blue-700">
+            Using sample data for demonstration. This is not your real Google Ads account data.
+          </p>
+        </div>
+      )}
+      
       {/* MCC Account Selector - only show if there are MCC accounts */}
       {mccAccounts.length > 0 && (
         <div>
@@ -152,6 +240,32 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
           ))}
         </select>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        
+        {!useMockData && (
+          <div className="mt-2 text-right">
+            <button
+              onClick={() => setUseMockData(true)}
+              className="text-xs text-gray-500 hover:text-blue-500"
+            >
+              Switch to sample data
+            </button>
+          </div>
+        )}
+        
+        {useMockData && (
+          <div className="mt-2 text-right">
+            <button
+              onClick={() => {
+                setUseMockData(false);
+                setSelectedMCC(null);
+                onChange("");
+              }}
+              className="text-xs text-gray-500 hover:text-blue-500"
+            >
+              Try real accounts
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

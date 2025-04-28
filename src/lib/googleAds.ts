@@ -17,39 +17,108 @@ export interface CustomerAccount {
   parentId?: string;
 }
 
+// Mock accounts for testing
+export const MOCK_CUSTOMER_ACCOUNTS: CustomerAccount[] = [
+  {
+    id: "1234567890",
+    resourceName: "customers/1234567890",
+    displayName: "Test Account 1",
+    isMCC: false
+  },
+  {
+    id: "9876543210",
+    resourceName: "customers/9876543210",
+    displayName: "Test MCC Account",
+    isMCC: true
+  },
+  {
+    id: "5555555555",
+    resourceName: "customers/5555555555",
+    displayName: "Sub Account 1",
+    isMCC: false,
+    parentId: "9876543210"
+  }
+];
+
 export class GoogleAdsClient {
   private client: GoogleAdsApi;
+  private useMockData: boolean = false;
 
   constructor(developerToken: string, clientId?: string, clientSecret?: string) {
-    this.client = new GoogleAdsApi({
-      developer_token: developerToken,
-      client_id: clientId || "",
-      client_secret: clientSecret || "",
-    });
+    // Enable mock mode if credentials are missing
+    const hasValidCredentials = developerToken && developerToken.length > 10 && 
+                               clientId && clientId.length > 10 && 
+                               clientSecret && clientSecret.length > 10;
+    
+    this.useMockData = !hasValidCredentials;
+    
+    if (this.useMockData) {
+      console.warn("GoogleAdsClient: Missing or invalid credentials. Using mock data mode.");
+    }
+    
+    try {
+      this.client = new GoogleAdsApi({
+        developer_token: developerToken || "mock_token",
+        client_id: clientId || "mock_client_id",
+        client_secret: clientSecret || "mock_client_secret",
+      });
+    } catch (error) {
+      console.error("GoogleAdsClient: Error initializing Google Ads API client", error);
+      this.useMockData = true;
+      this.client = {} as GoogleAdsApi; // Empty object as a fallback
+    }
   }
 
   async createCustomer(customerId: string, refreshToken: string) {
-    return this.client.Customer({
-      customer_id: customerId,
-      refresh_token: refreshToken,
-    });
+    try {
+      if (this.useMockData) {
+        console.log(`GoogleAdsClient (MOCK): Creating customer for ID ${customerId}`);
+        return { customer_id: customerId };
+      }
+      
+      return this.client.Customer({
+        customer_id: customerId,
+        refresh_token: refreshToken,
+      });
+    } catch (error) {
+      console.error(`GoogleAdsClient: Error creating customer for ID ${customerId}`, error);
+      throw error;
+    }
   }
 
   async getAccessibleCustomers(refreshToken: string) {
     try {
-      console.log("Getting accessible customers with refresh token");
+      if (this.useMockData) {
+        console.log("GoogleAdsClient (MOCK): Getting accessible customers");
+        return { resourceNames: MOCK_CUSTOMER_ACCOUNTS.map(a => a.resourceName) };
+      }
+      
+      console.log("GoogleAdsClient: Getting accessible customers with refresh token");
+      console.log("GoogleAdsClient: Refresh token length:", refreshToken?.length || 0);
+      
       const customers = await this.client.listAccessibleCustomers(refreshToken);
-      console.log("API response:", JSON.stringify(customers));
+      console.log("GoogleAdsClient: API response type:", typeof customers);
+      console.log("GoogleAdsClient: API response:", JSON.stringify(customers, null, 2));
       return customers;
     } catch (error) {
-      console.error("Error fetching accessible customers:", error);
-      throw error;
+      console.error("GoogleAdsClient: Error fetching accessible customers:", error);
+      // Add more detailed diagnostic info to the error
+      const enhancedError = new Error(
+        `Failed to fetch Google Ads accounts: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      throw enhancedError;
     }
   }
 
   async getMCCAccounts(refreshToken: string): Promise<CustomerAccount[]> {
     try {
+      if (this.useMockData) {
+        console.log("GoogleAdsClient (MOCK): Getting MCC accounts");
+        return MOCK_CUSTOMER_ACCOUNTS;
+      }
+      
       // First get all accessible accounts
+      console.log("GoogleAdsClient: Getting MCC accounts - starting");
       const customersResponse = await this.getAccessibleCustomers(refreshToken);
       
       let customersList: string[] = [];
@@ -59,6 +128,8 @@ export class GoogleAdsClient {
       } else if (Array.isArray(customersResponse)) {
         customersList = customersResponse;
       }
+
+      console.log(`GoogleAdsClient: Processing ${customersList.length} accounts`);
 
       // Try to identify MCC accounts by checking account hierarchy
       const formattedCustomers: CustomerAccount[] = [];
@@ -87,28 +158,34 @@ export class GoogleAdsClient {
           
           formattedCustomers.push(account);
         } catch (err) {
-          console.error(`Error processing customer ${customerResource}:`, err);
+          console.error(`GoogleAdsClient: Error processing customer ${customerResource}:`, err);
           // Continue with next customer
         }
       }
       
+      console.log(`GoogleAdsClient: Returning ${formattedCustomers.length} formatted accounts`);
       return formattedCustomers;
     } catch (error) {
-      console.error("Error fetching MCC accounts:", error);
+      console.error("GoogleAdsClient: Error fetching MCC accounts:", error);
       throw error;
     }
   }
 
   async getSubAccounts(mccId: string): Promise<CustomerAccount[]> {
     try {
+      if (this.useMockData) {
+        console.log(`GoogleAdsClient (MOCK): Getting sub-accounts for MCC ID ${mccId}`);
+        return MOCK_CUSTOMER_ACCOUNTS.filter(acc => acc.parentId === mccId);
+      }
+      
       // In a real implementation, you would query the API to get sub-accounts under this MCC
       // For now, this is a placeholder that returns an empty array
-      console.log(`Getting sub-accounts for MCC ID: ${mccId}`);
+      console.log(`GoogleAdsClient: Getting sub-accounts for MCC ID: ${mccId}`);
       
       // Placeholder for real implementation
       return [];
     } catch (error) {
-      console.error(`Error fetching sub-accounts for MCC ${mccId}:`, error);
+      console.error(`GoogleAdsClient: Error fetching sub-accounts for MCC ${mccId}:`, error);
       throw error;
     }
   }
@@ -118,6 +195,15 @@ export class GoogleAdsClient {
       // This is a simplified example for demonstration purposes
       // In a real implementation, you would use these parameters to create the campaign
       const { customerId } = params;
+      
+      if (this.useMockData) {
+        console.log(`GoogleAdsClient (MOCK): Creating campaign for customer ${customerId}`);
+        return {
+          success: true,
+          campaignId: `Campaign_MOCK_${Date.now()}`,
+          message: "Campaign created successfully (MOCK)",
+        };
+      }
       
       // Create the customer instance but don't need to assign it to a variable if unused
       this.client.Customer({
@@ -133,7 +219,7 @@ export class GoogleAdsClient {
       // 4. Create ads with the provided headlines and descriptions
       
       // Using customer and all params would be necessary in a real implementation
-      console.log(`Creating campaign for customer ${customerId}`);
+      console.log(`GoogleAdsClient: Creating campaign for customer ${customerId}`);
       if (params.name && params.budget > 0 && params.maxCpc > 0 && 
           params.headlines.length === 10 && params.descriptions.length > 0) {
         // In a real implementation, these values would be used to make API calls
@@ -146,11 +232,14 @@ export class GoogleAdsClient {
         message: "Campaign created successfully",
       };
     } catch (error) {
-      console.error("Error creating search campaign:", error);
+      console.error("GoogleAdsClient: Error creating search campaign:", error);
       throw error;
     }
   }
 }
+
+// Check if we're in a development environment
+const isDevelopment = process.env.NODE_ENV === "development";
 
 // Create a singleton instance
 const googleAdsClient = new GoogleAdsClient(

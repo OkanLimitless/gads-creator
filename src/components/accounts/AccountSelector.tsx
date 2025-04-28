@@ -72,19 +72,42 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [useMockData, setUseMockData] = useState(true);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState<string>('Initializing...');
+  
+  // Use a longer timeout for production/Vercel environments
+  const CLIENT_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 50000 : 30000;
 
   const fetchCustomers = async () => {
     try {
       setIsLoading(true);
       setFetchError(null);
       setDebugInfo(null);
+      setLoadingProgress('Initializing connection...');
+
+      // Set progress updates - calculate based on timeout
+      const progressInterval = Math.floor(CLIENT_TIMEOUT_MS / 6); // 6 steps
+      const progressUpdates = [
+        { time: progressInterval, message: 'Connecting to Google Ads API...' },
+        { time: progressInterval * 2, message: 'API request in progress...' },
+        { time: progressInterval * 3, message: 'Still waiting for response...' },
+        { time: progressInterval * 4, message: 'This is taking longer than expected...' },
+        { time: progressInterval * 5, message: 'Almost there, please wait...' }
+      ];
+      
+      // Schedule progress updates
+      const progressTimers = progressUpdates.map(update => {
+        return setTimeout(() => {
+          setLoadingProgress(update.message);
+        }, update.time);
+      });
 
       // Set a timeout for the API call
       timeoutRef.current = setTimeout(() => {
-        console.error("Account selector: API call timeout after 30 seconds");
+        console.error(`Account selector: API call timeout after ${CLIENT_TIMEOUT_MS/1000} seconds`);
         setFetchError("Request timed out. The Google Ads API might be unavailable or the refresh token might have expired.");
         setIsLoading(false);
-      }, 30000);
+        setLoadingProgress('Timed out');
+      }, CLIENT_TIMEOUT_MS);
 
       console.log("Account selector: Fetching accounts");
       const response = await axios.get("/api/google-ads/accounts");
@@ -93,6 +116,9 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      
+      // Clear progress timers
+      progressTimers.forEach(timer => clearTimeout(timer));
       
       console.log("Account selector: API response:", response.data);
       
@@ -166,18 +192,28 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-4">
         <div className="animate-pulse flex space-x-4">
           <div className="flex-1 space-y-2 py-1">
             <div className="h-10 bg-gray-200 rounded"></div>
           </div>
         </div>
-        <div className="animate-pulse flex space-x-4">
-          <div className="flex-1 space-y-2 py-1">
-            <div className="h-10 bg-gray-200 rounded"></div>
+        
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+          <div className="flex items-center">
+            <Spinner size="sm" className="mr-2" />
+            <div>
+              <h3 className="text-sm font-medium text-blue-800">Loading Google Ads accounts</h3>
+              <p className="text-sm text-blue-600 mt-1">{loadingProgress}</p>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                <div className="bg-blue-600 h-2.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Note: The Google Ads API can sometimes take up to {Math.floor(CLIENT_TIMEOUT_MS/1000)} seconds to respond.
+              </p>
+            </div>
           </div>
         </div>
-        <p className="text-xs text-gray-500 text-center">Loading account information...</p>
       </div>
     );
   }
@@ -268,7 +304,7 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
                 {isLoading ? (
                   <div className="flex items-center gap-2">
                     <Spinner size="sm" /> 
-                    <span>Loading accounts...</span>
+                    <span>{loadingProgress}</span>
                   </div>
                 ) : selectedAccount ? (
                   selectedAccount.displayName || `Account ${selectedAccount.id}`

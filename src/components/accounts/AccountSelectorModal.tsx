@@ -1,5 +1,5 @@
 import { Modal, ModalContent, ModalHeader, ModalBody, Input, ModalFooter, Button } from "@nextui-org/react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
 
 interface Customer {
@@ -25,18 +25,24 @@ export function AccountSelectorModal({
 }: AccountSelectorModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter accounts based on search query
-  const filteredAccounts = accounts.filter((account) => {
+  // Filter accounts based on search query - use useMemo to cache results
+  const filteredAccounts = useMemo(() => {
+    if (!searchQuery.trim()) return accounts;
+    
     const searchLower = searchQuery.toLowerCase();
-    return (
+    return accounts.filter((account) => (
       account.id.includes(searchLower) ||
       (account.displayName?.toLowerCase().includes(searchLower))
-    );
-  });
+    ));
+  }, [searchQuery, accounts]);
 
-  // Group accounts by MCC and regular
-  const mccAccounts = filteredAccounts.filter((account) => account.isMCC);
-  const regularAccounts = filteredAccounts.filter((account) => !account.isMCC);
+  // Group accounts by MCC and regular - also using useMemo for efficiency
+  const { mccAccounts, regularAccounts } = useMemo(() => {
+    return {
+      mccAccounts: filteredAccounts.filter((account) => account.isMCC),
+      regularAccounts: filteredAccounts.filter((account) => !account.isMCC)
+    };
+  }, [filteredAccounts]);
 
   return (
     <Modal 

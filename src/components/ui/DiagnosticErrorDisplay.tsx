@@ -51,6 +51,9 @@ export function DiagnosticErrorDisplay({
     return `+${currTime - prevTime}ms`;
   };
   
+  // Check if error is a timeout
+  const isTimeout = error?.toLowerCase().includes('timeout') || error?.toLowerCase().includes('timed out');
+  
   return (
     <div className="bg-red-50 border border-red-200 rounded-md p-4">
       <div className="flex flex-col">
@@ -67,6 +70,21 @@ export function DiagnosticErrorDisplay({
         
         {timestamp && (
           <div className="mt-1 text-xs text-gray-500">Occurred at: {formattedTime}</div>
+        )}
+        
+        {isTimeout && (
+          <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
+            <h4 className="font-medium text-yellow-800">Why does this happen?</h4>
+            <ul className="list-disc pl-5 mt-1 text-yellow-700 text-xs space-y-1">
+              <li>The Google Ads API is known to be slow on first access after a period of inactivity</li>
+              <li>Your refresh token might need to be renewed if you haven't used the application recently</li>
+              <li>Network connectivity issues between our server and Google's API servers</li>
+              <li>Google Ads API service may be experiencing temporary issues</li>
+            </ul>
+            <div className="mt-2 text-xs text-yellow-800">
+              <strong>Suggestions:</strong> Try refreshing, using sample data for now, or signing out and back in to refresh your OAuth tokens.
+            </div>
+          </div>
         )}
         
         {diagnosticReport && (

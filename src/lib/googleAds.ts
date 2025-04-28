@@ -9,6 +9,18 @@ import { createLogger, createLogSession } from './serverLogger';
 // Create a dedicated logger for Google Ads operations
 const logger = createLogger('google-ads');
 
+// Calculate API timeout based on environment
+// For Vercel deployments, we need to respect the maxDuration (60s) in vercel.json,
+// but account for processing overhead by setting timeout at 50s
+const IS_VERCEL = process.env.VERCEL === '1';
+const TIMEOUT_MS = IS_VERCEL ? 50000 : 30000; // 50 seconds for Vercel, 30 seconds for local
+
+logger.info('Initializing Google Ads client', {
+  environment: process.env.NODE_ENV,
+  isVercel: IS_VERCEL,
+  timeout: TIMEOUT_MS
+});
+
 export interface CreateCampaignParams {
   customerId: string;
   name: string;
@@ -122,9 +134,9 @@ export class GoogleAdsClient {
     const sessionLogger = logSession.logger;
     
     // Start diagnostic tracing
-    diagnosticTracer.start(60000); // 60 second timeout
+    diagnosticTracer.start(TIMEOUT_MS); // Use environment-specific timeout
     diagnosticTracer.addTrace("googleAds", "getAccessibleCustomers started", { refreshTokenLength: refreshToken?.length || 0 });
-    sessionLogger.info('Starting getAccessibleCustomers', { refreshTokenLength: refreshToken?.length || 0 });
+    sessionLogger.info('Starting getAccessibleCustomers', { refreshTokenLength: refreshToken?.length || 0, timeoutMs: TIMEOUT_MS });
     
     try {
       if (this.useMockData) {
@@ -251,7 +263,7 @@ export class GoogleAdsClient {
         
         const customers = await createTimeoutPromise(
           client.listAccessibleCustomers(refreshToken),
-          40000, // 40 seconds timeout for the API call
+          TIMEOUT_MS - 10000, // Leave 10 seconds buffer for processing
           "Google Ads API listAccessibleCustomers call timed out"
         );
         

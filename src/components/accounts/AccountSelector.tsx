@@ -75,7 +75,7 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
   const [loadingProgress, setLoadingProgress] = useState<string>('Initializing...');
   
   // Use a longer timeout for production/Vercel environments
-  const CLIENT_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 50000 : 30000;
+  const CLIENT_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 60000 : 45000;
 
   const fetchCustomers = async () => {
     try {

@@ -61,7 +61,7 @@ export default function DashboardPage() {
           console.error("API call timeout after 10 seconds");
           setError("Request timed out. The Google Ads API might be unavailable or the refresh token might have expired.");
           setLoading(false);
-        }, 10000);
+        }, 20000);
 
         console.log("Fetching accounts from API");
         const response = await axios.get("/api/google-ads/accounts");

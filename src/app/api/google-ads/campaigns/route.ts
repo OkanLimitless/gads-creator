@@ -71,10 +71,11 @@ export async function POST(request: NextRequest) {
     const result = await googleAdsClient.createSearchCampaign(params, session.refreshToken);
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to create campaign";
     console.error("Error creating Google Ads campaign:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create campaign" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

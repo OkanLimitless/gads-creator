@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { FcGoogle } from "react-icons/fc";
 
 export default function LoginPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
 
   useEffect(() => {

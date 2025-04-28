@@ -10,6 +10,15 @@ interface Customer {
   resourceName: string;
 }
 
+interface ApiError {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+  message?: string;
+}
+
 export default function DashboardPage() {
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
@@ -23,9 +32,10 @@ export default function DashboardPage() {
         const response = await axios.get("/api/google-ads/accounts");
         setCustomers(response.data.customers || []);
         setError(null);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error fetching customers:", err);
-        setError(err.response?.data?.error || "Failed to fetch Google Ads accounts");
+        const apiError = err as ApiError;
+        setError(apiError.response?.data?.error || apiError.message || "Failed to fetch Google Ads accounts");
       } finally {
         setLoading(false);
       }
@@ -70,7 +80,7 @@ export default function DashboardPage() {
         <div className="text-center">
           <h3 className="text-lg leading-6 font-medium text-gray-900">No Google Ads Accounts Found</h3>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
-            You don't have any Google Ads accounts connected to your Google account, or you haven't granted the necessary permissions.
+            You don&apos;t have any Google Ads accounts connected to your Google account, or you haven&apos;t granted the necessary permissions.
           </p>
           <div className="mt-6">
             <Link

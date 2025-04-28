@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import googleAdsClient from "@/lib/googleAds";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -38,10 +38,11 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ customers: formattedCustomers });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to fetch Google Ads accounts";
     console.error("Error fetching Google Ads accounts:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch Google Ads accounts" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

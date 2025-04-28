@@ -14,6 +14,15 @@ interface AccountSelectorProps {
   error?: string;
 }
 
+interface ApiError {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+  message?: string;
+}
+
 export function AccountSelector({ value, onChange, error }: AccountSelectorProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,9 +34,10 @@ export function AccountSelector({ value, onChange, error }: AccountSelectorProps
         setLoading(true);
         const response = await axios.get("/api/google-ads/accounts");
         setCustomers(response.data.customers || []);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error fetching customers:", err);
-        setFetchError(err.response?.data?.error || "Failed to fetch Google Ads accounts");
+        const apiError = err as ApiError;
+        setFetchError(apiError.response?.data?.error || apiError.message || "Failed to fetch Google Ads accounts");
       } finally {
         setLoading(false);
       }

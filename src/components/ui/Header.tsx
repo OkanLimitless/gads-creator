@@ -4,6 +4,7 @@ import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FcGoogle } from "react-icons/fc";
+import Image from "next/image";
 
 export function Header() {
   const { data: session } = useSession();
@@ -47,10 +48,12 @@ export function Header() {
               <div className="flex items-center">
                 <div className="flex items-center">
                   {session.user.image && (
-                    <img
+                    <Image
                       src={session.user.image}
                       alt={session.user.name || "User"}
                       className="h-8 w-8 rounded-full mr-2"
+                      width={32}
+                      height={32}
                     />
                   )}
                   <span className="text-sm font-medium text-gray-700 mr-4 hidden sm:block">

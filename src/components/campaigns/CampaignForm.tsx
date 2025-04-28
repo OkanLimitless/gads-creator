@@ -12,6 +12,15 @@ import { AdTextInputs } from "@/components/campaigns/AdTextInputs";
 const DEFAULT_HEADLINES = Array(10).fill("");
 const DEFAULT_DESCRIPTIONS = [""];
 
+interface ApiError {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+  message?: string;
+}
+
 export function CampaignForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -72,17 +81,23 @@ export function CampaignForm() {
     try {
       const response = await axios.post("/api/google-ads/campaigns", data);
       router.push(`/dashboard/campaigns/success?id=${response.data.campaignId}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error creating campaign:", err);
-      setError(err.response?.data?.error || "Failed to create campaign");
+      const apiError = err as ApiError;
+      setError(apiError.response?.data?.error || apiError.message || "Failed to create campaign");
       setIsSubmitting(false);
     }
   };
   
   // Helper function to safely map error messages
-  const mapErrorMessages = (errors: any[] | undefined): string[] => {
+  const mapErrorMessages = (errors: unknown[] | undefined): string[] => {
     if (!errors) return [];
-    return errors.map((err) => err?.message || '');
+    return errors.map((err) => {
+      if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
+        return err.message;
+      }
+      return '';
+    });
   };
   
   return (
@@ -193,8 +208,8 @@ export function CampaignForm() {
             onDescriptionChange={onDescriptionChange}
             onAddDescription={onAddDescription}
             onRemoveDescription={onRemoveDescription}
-            headlineErrors={mapErrorMessages(errors.headlines as any[])}
-            descriptionErrors={mapErrorMessages(errors.descriptions as any[])}
+            headlineErrors={mapErrorMessages(errors.headlines as unknown[])}
+            descriptionErrors={mapErrorMessages(errors.descriptions as unknown[])}
           />
         </div>
       </div>

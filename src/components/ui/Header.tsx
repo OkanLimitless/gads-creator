@@ -41,6 +41,26 @@ export function Header() {
               >
                 Create Campaign
               </Link>
+              <Link
+                href="/accounts/hierarchy"
+                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                  pathname === "/accounts/hierarchy"
+                    ? "border-blue-500 text-gray-900"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                Account Hierarchy
+              </Link>
+              <Link
+                href="/accounts/hierarchy?debug=true"
+                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                  pathname === "/accounts/hierarchy" && pathname.includes("debug=true")
+                    ? "border-blue-500 text-gray-900"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                Hierarchy Debug
+              </Link>
             </nav>
           </div>
           <div className="flex items-center">

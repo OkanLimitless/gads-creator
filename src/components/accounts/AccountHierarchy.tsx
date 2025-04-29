@@ -30,6 +30,8 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
   const [isForceRefreshing, setIsForceRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const accountsPerPage = 10; // Show 10 accounts per page
+  const [showRawApiData, setShowRawApiData] = useState(false);
+  const [rawApiData, setRawApiData] = useState<any>(null);
 
   const fetchAccountHierarchy = async (clearCache = false) => {
     setIsLoading(true);
@@ -46,6 +48,9 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
         : `/api/google-ads/accounts/hierarchy?mccId=${mccId}`;
       
       const response = await axios.get(url);
+      
+      // Save raw API data for debugging
+      setRawApiData(response.data);
       
       console.log("AccountHierarchy: API response:", response.data);
       const { mccAccount, subAccounts } = response.data;
@@ -183,8 +188,33 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
           >
             Force Refresh
           </Button>
+          <Button
+            variant="flat"
+            size="sm"
+            color={showRawApiData ? "danger" : "secondary"}
+            onClick={(e: React.MouseEvent) => {
+              e.preventDefault();
+              setShowRawApiData(!showRawApiData);
+            }}
+          >
+            {showRawApiData ? "Hide Raw Data" : "Show Raw Data"}
+          </Button>
         </div>
       </div>
+      
+      {/* Show raw API data for debugging */}
+      {showRawApiData && rawApiData && (
+        <Card className="w-full mb-4">
+          <CardBody>
+            <h3 className="text-sm font-medium mb-2">Raw API Response Data</h3>
+            <div className="bg-gray-100 p-2 rounded-md overflow-auto max-h-64">
+              <pre className="text-xs whitespace-pre-wrap">
+                {JSON.stringify(rawApiData, null, 2)}
+              </pre>
+            </div>
+          </CardBody>
+        </Card>
+      )}
       
       {mccAccount && (
         <Card className="w-full">

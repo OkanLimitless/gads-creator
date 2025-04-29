@@ -25,9 +25,11 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const mccId = url.searchParams.get('mccId');
     const clearCache = url.searchParams.get('clear_cache') === 'true';
+    const includeDebug = url.searchParams.get('debug') === 'true';
     
     console.log("API route: Processing request with mccId:", mccId);
     console.log("API route: Clear cache:", clearCache);
+    console.log("API route: Include debug:", includeDebug);
     
     // Check if mccId was provided
     if (!mccId) {
@@ -138,6 +140,28 @@ export async function GET(request: Request) {
         success: true 
       };
       
+      // Add debug info if requested
+      if (includeDebug) {
+        console.log("API route: Including debug information in response");
+        (responseData as any).debug = {
+          timestamp: new Date().toISOString(),
+          requestParams: {
+            mccId,
+            clearCache,
+            includeDebug
+          },
+          accountsCounts: {
+            totalAccounts: mccAccounts.length,
+            subAccountsCount: subAccounts.length
+          },
+          detailedApiCalls: {
+            getMccAccountsCalled: true,
+            getSubAccountsCalled: true,
+            cacheUsed: !clearCache && !!cachedData
+          }
+        };
+      }
+      
       // Cache the successful response
       hierarchyCache.set(cacheKey, {
         data: responseData,
@@ -158,6 +182,17 @@ export async function GET(request: Request) {
         diagnosticReport: error.diagnosticReport || null
       };
       
+      // Add additional debug info if requested
+      if (includeDebug) {
+        (errorDetail as any).debug = {
+          mccId,
+          clearCache,
+          includeDebug,
+          errorObject: formatError(error),
+          stackTrace: error.stack
+        };
+      }
+      
       console.error("API route: API method failed:", errorDetail);
       
       return NextResponse.json(
@@ -166,7 +201,8 @@ export async function GET(request: Request) {
           details: errorDetail.details,
           code: errorDetail.code,
           timestamp: errorDetail.timestamp,
-          diagnosticReport: errorDetail.diagnosticReport
+          diagnosticReport: errorDetail.diagnosticReport,
+          debug: includeDebug ? (errorDetail as any).debug : undefined
         },
         { status: 500 }
       );

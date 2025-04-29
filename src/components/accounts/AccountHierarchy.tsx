@@ -27,14 +27,25 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
   const [subAccounts, setSubAccounts] = useState<Account[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [isForceRefreshing, setIsForceRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const accountsPerPage = 10; // Show 10 accounts per page
 
-  const fetchAccountHierarchy = async () => {
+  const fetchAccountHierarchy = async (clearCache = false) => {
     setIsLoading(true);
     setError(null);
     
+    if (clearCache) {
+      setIsForceRefreshing(true);
+    }
+    
     try {
-      console.log(`AccountHierarchy: Fetching hierarchy for MCC ID ${mccId}`);
-      const response = await axios.get(`/api/google-ads/accounts/hierarchy?mccId=${mccId}`);
+      console.log(`AccountHierarchy: Fetching hierarchy for MCC ID ${mccId}${clearCache ? ' (with cache clear)' : ''}`);
+      const url = clearCache 
+        ? `/api/google-ads/accounts/hierarchy?mccId=${mccId}&clear_cache=true` 
+        : `/api/google-ads/accounts/hierarchy?mccId=${mccId}`;
+      
+      const response = await axios.get(url);
       
       console.log("AccountHierarchy: API response:", response.data);
       const { mccAccount, subAccounts } = response.data;
@@ -50,6 +61,9 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
       setSubAccounts(subAccounts || []);
       
       console.log(`AccountHierarchy: Found ${subAccounts?.length || 0} sub-accounts`);
+      
+      // Reset to first page when loading new data
+      setCurrentPage(1);
       
       // Show toast notifications
       if (subAccounts?.length > 0) {
@@ -76,8 +90,32 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
       toast.error("Failed to load account hierarchy");
     } finally {
       setIsLoading(false);
+      setIsForceRefreshing(false);
     }
   };
+
+  // Force refresh clears the cache and fetches fresh data
+  const forceRefresh = (e: React.MouseEvent) => {
+    e.preventDefault();
+    fetchAccountHierarchy(true);
+  };
+
+  // Normal refresh doesn't clear cache
+  const normalRefresh = (e: React.MouseEvent) => {
+    e.preventDefault();
+    fetchAccountHierarchy(false);
+  };
+
+  // Simple retry for error display component
+  const handleRetry = () => {
+    fetchAccountHierarchy(false);
+  };
+
+  // Calculate pagination
+  const totalPages = Math.ceil(subAccounts.length / accountsPerPage);
+  const indexOfLastAccount = currentPage * accountsPerPage;
+  const indexOfFirstAccount = indexOfLastAccount - accountsPerPage;
+  const currentAccounts = subAccounts.slice(indexOfFirstAccount, indexOfLastAccount);
 
   useEffect(() => {
     if (session && mccId) {
@@ -114,7 +152,7 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
           diagnosticReport={debugInfo?.diagnosticReport}
           timestamp={debugInfo?.timestamp}
           code={debugInfo?.error?.code}
-          onRetry={fetchAccountHierarchy}
+          onRetry={handleRetry}
         />
       </div>
     );
@@ -124,14 +162,28 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Account Hierarchy</h2>
-        <Button 
-          variant="flat" 
-          size="sm" 
-          startContent={<RefreshCcw size={16} />}
-          onClick={fetchAccountHierarchy}
-        >
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="flat" 
+            size="sm" 
+            startContent={<RefreshCcw size={16} />}
+            onClick={normalRefresh}
+            isDisabled={isForceRefreshing}
+          >
+            Refresh
+          </Button>
+          <Button 
+            variant="flat" 
+            size="sm" 
+            color="warning"
+            startContent={<RefreshCcw size={16} />}
+            onClick={forceRefresh}
+            isLoading={isForceRefreshing}
+            isDisabled={isForceRefreshing}
+          >
+            Force Refresh
+          </Button>
+        </div>
       </div>
       
       {mccAccount && (
@@ -146,9 +198,39 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
             
             {subAccounts.length > 0 ? (
               <div className="mt-4">
-                <h3 className="text-sm font-medium mb-2">Sub Accounts ({subAccounts.length})</h3>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-medium">Sub Accounts ({subAccounts.length})</h3>
+                  
+                  {/* Pagination controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        isIconOnly
+                        isDisabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      >
+                        &laquo;
+                      </Button>
+                      <span className="text-xs">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        isIconOnly
+                        isDisabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      >
+                        &raquo;
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                
                 <Accordion>
-                  {subAccounts.map((account) => (
+                  {currentAccounts.map((account) => (
                     <AccordionItem
                       key={account.id}
                       title={
@@ -173,6 +255,49 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                     </AccordionItem>
                   ))}
                 </Accordion>
+                
+                {/* Bottom pagination for many accounts */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center mt-4">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        isDisabled={currentPage === 1}
+                        onClick={() => setCurrentPage(1)}
+                      >
+                        First
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        isDisabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      >
+                        Previous
+                      </Button>
+                      <span className="mx-2 text-sm">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        isDisabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      >
+                        Next
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        isDisabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(totalPages)}
+                      >
+                        Last
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="mt-4 text-sm text-gray-500">
@@ -192,10 +317,10 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                       size="sm" 
                       variant="flat" 
                       color="warning"
-                      onClick={fetchAccountHierarchy}
+                      onClick={forceRefresh}
                       startContent={<RefreshCcw size={14} />}
                     >
-                      Try Again
+                      Force Refresh
                     </Button>
                   </div>
                 </div>

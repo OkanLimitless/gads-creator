@@ -24,8 +24,10 @@ export async function GET(request: Request) {
     // Get the search params from the request
     const url = new URL(request.url);
     const mccId = url.searchParams.get('mccId');
+    const clearCache = url.searchParams.get('clear_cache') === 'true';
     
     console.log("API route: Processing request with mccId:", mccId);
+    console.log("API route: Clear cache:", clearCache);
     
     // Check if mccId was provided
     if (!mccId) {
@@ -66,10 +68,17 @@ export async function GET(request: Request) {
     
     // Check if we have cached data for this MCC
     const cacheKey = `hierarchy-${mccId}-${session.user?.email}`;
+    
+    // Clear cache if requested
+    if (clearCache) {
+      console.log(`API route: Clearing cache for ${cacheKey}`);
+      hierarchyCache.delete(cacheKey);
+    }
+    
     const cachedData = hierarchyCache.get(cacheKey);
     const now = Date.now();
     
-    if (cachedData && (now - cachedData.timestamp < CACHE_TTL)) {
+    if (cachedData && (now - cachedData.timestamp < CACHE_TTL) && !clearCache) {
       console.log("API route: Using cached hierarchy data");
       return NextResponse.json(cachedData.data);
     }

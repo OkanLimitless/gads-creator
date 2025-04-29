@@ -142,6 +142,7 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
               <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">MCC</span>
             </div>
             <p className="text-sm text-gray-500">ID: {mccAccount.id}</p>
+            <p className="text-sm text-gray-500">Resource: {mccAccount.resourceName}</p>
             
             {subAccounts.length > 0 ? (
               <div className="mt-4">
@@ -163,9 +164,11 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                       subtitle={`ID: ${account.id}`}
                       indicator={<ChevronDown className="text-gray-500" />}
                     >
-                      <div className="px-2 py-1">
+                      <div className="px-2 py-1 space-y-1">
                         <p className="text-sm">Resource: {account.resourceName}</p>
-                        <p className="text-sm mt-1">Parent MCC: {account.parentId}</p>
+                        <p className="text-sm">Parent MCC: {account.parentId}</p>
+                        <p className="text-sm">Account Type: {account.isMCC ? 'Manager Account (MCC)' : 'Client Account'}</p>
+                        <p className="text-sm">Relationship: Sub-account of {mccAccount.id}</p>
                       </div>
                     </AccordionItem>
                   ))}
@@ -173,7 +176,29 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
               </div>
             ) : (
               <div className="mt-4 text-sm text-gray-500">
-                No sub-accounts found for this MCC.
+                <div className="p-4 border border-yellow-200 bg-yellow-50 rounded-md">
+                  <p className="font-medium text-yellow-800">No sub-accounts found for this MCC.</p>
+                  <p className="mt-1 text-yellow-700">
+                    This could be because:
+                  </p>
+                  <ul className="list-disc pl-5 mt-1 text-yellow-700 text-xs">
+                    <li>Your Google account doesn't have access to sub-accounts under this MCC</li>
+                    <li>This account is not actually an MCC account</li>
+                    <li>There are no sub-accounts under this MCC</li>
+                    <li>The Google Ads API is experiencing issues</li>
+                  </ul>
+                  <div className="mt-2">
+                    <Button 
+                      size="sm" 
+                      variant="flat" 
+                      color="warning"
+                      onClick={fetchAccountHierarchy}
+                      startContent={<RefreshCcw size={14} />}
+                    >
+                      Try Again
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </CardBody>

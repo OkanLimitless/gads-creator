@@ -82,6 +82,12 @@ export async function GET(request: Request) {
       const mccAccounts = await googleAdsClient.getMCCAccounts(session.refreshToken);
       console.log(`API route: Found ${mccAccounts.length} MCC accounts`);
       
+      // Dump account details for debugging
+      console.log("API route: Available accounts:");
+      mccAccounts.forEach((acc) => {
+        console.log(`- ID: ${acc.id}, Name: ${acc.displayName || 'Unnamed'}, isMCC: ${acc.isMCC || false}`);
+      });
+      
       const mccAccount = mccAccounts.find(acc => acc.id === mccId);
       
       if (!mccAccount) {
@@ -96,12 +102,25 @@ export async function GET(request: Request) {
         );
       }
       
+      // Force isMCC flag for this account since we're treating it as an MCC
+      mccAccount.isMCC = true;
+      
       console.log(`API route: Found MCC account: ${mccAccount.displayName || mccAccount.id}`);
       
       // Get sub-accounts for the MCC
       console.log(`API route: Fetching sub-accounts for MCC ${mccId}`);
       const subAccounts = await googleAdsClient.getSubAccounts(mccId, session.refreshToken);
       console.log(`API route: Found ${subAccounts.length} sub-accounts`);
+      
+      // Log information about found sub-accounts
+      if (subAccounts.length > 0) {
+        console.log("API route: Sub-accounts found:");
+        subAccounts.forEach((acc, index) => {
+          console.log(`- ${index+1}. ID: ${acc.id}, Name: ${acc.displayName || 'Unnamed'}, isMCC: ${acc.isMCC || false}`);
+        });
+      } else {
+        console.log("API route: No sub-accounts found for this MCC");
+      }
       
       // Create the response data
       const responseData = { 

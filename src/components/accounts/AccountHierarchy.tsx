@@ -32,6 +32,8 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
   const accountsPerPage = 10; // Show 10 accounts per page
   const [showRawApiData, setShowRawApiData] = useState(false);
   const [rawApiData, setRawApiData] = useState<any>(null);
+  const [fullAccountList, setFullAccountList] = useState<any>(null);
+  const [showFullAccountList, setShowFullAccountList] = useState(false);
 
   const fetchAccountHierarchy = async (clearCache = false) => {
     setIsLoading(true);
@@ -103,6 +105,24 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
   const forceRefresh = (e: React.MouseEvent) => {
     e.preventDefault();
     fetchAccountHierarchy(true);
+  };
+
+  // Fetch the full account list for debugging
+  const fetchFullAccountList = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    try {
+      setIsLoading(true);
+      const response = await axios.get(`/api/google-ads/debug/full-account-list?mccId=${mccId}`);
+      setFullAccountList(response.data);
+      setShowFullAccountList(true);
+      toast.success(`Retrieved ${response.data.totalAccounts} accounts`);
+    } catch (err) {
+      console.error("Error fetching full account list:", err);
+      toast.error("Failed to fetch full account list");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Normal refresh doesn't clear cache
@@ -199,6 +219,14 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
           >
             {showRawApiData ? "Hide Raw Data" : "Show Raw Data"}
           </Button>
+          <Button
+            variant="flat"
+            size="sm"
+            color="primary"
+            onClick={fetchFullAccountList}
+          >
+            Full Account List
+          </Button>
         </div>
       </div>
       
@@ -211,6 +239,48 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
               <pre className="text-xs whitespace-pre-wrap">
                 {JSON.stringify(rawApiData, null, 2)}
               </pre>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+      
+      {/* Show full account list for debugging */}
+      {showFullAccountList && fullAccountList && (
+        <Card className="w-full mb-4">
+          <CardBody>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-medium">Full Account List ({fullAccountList.totalAccounts} accounts)</h3>
+              <Button
+                size="sm"
+                variant="light"
+                onClick={() => setShowFullAccountList(false)}
+              >
+                Hide
+              </Button>
+            </div>
+            <div className="bg-gray-100 p-2 rounded-md overflow-auto max-h-96">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-200">
+                    <th className="p-2 text-left">ID</th>
+                    <th className="p-2 text-left">Name</th>
+                    <th className="p-2 text-left">Level</th>
+                    <th className="p-2 text-left">Is MCC</th>
+                    <th className="p-2 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fullAccountList.accounts.map((account: any, index: number) => (
+                    <tr key={account.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="p-2">{account.id}</td>
+                      <td className="p-2">{account.displayName}</td>
+                      <td className="p-2">{account.level}</td>
+                      <td className="p-2">{account.isMCC ? 'Yes' : 'No'}</td>
+                      <td className="p-2">{account.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </CardBody>
         </Card>

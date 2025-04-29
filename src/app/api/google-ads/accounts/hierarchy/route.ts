@@ -151,7 +151,7 @@ export async function GET(request: Request) {
       
       try {
         // Force using the manual list for now
-        const forceManualList = true;
+        const forceManualList = false;
         
         if (forceManualList) {
           console.log(`API route: Forcing use of manual sub-accounts list`);

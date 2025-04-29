@@ -776,7 +776,70 @@ export class GoogleAdsClient {
       }
       
       // If the direct approach failed, try the original approach with the GAQL query
-      // ... [existing code] ...
+      try {
+        console.log("GoogleAdsClient: Trying GAQL query approach for sub-accounts");
+        
+        // Dynamically import the Google Ads API
+        const { GoogleAdsApi } = await import('google-ads-api');
+        
+        const client = new GoogleAdsApi({
+          developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+          client_id: process.env.GOOGLE_CLIENT_ID || "",
+          client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+        });
+        
+        console.log(`GoogleAdsClient: Creating customer instance for MCC ${mccId}`);
+        const customer = client.Customer({
+          customer_id: mccId,
+          refresh_token: refreshToken,
+        });
+        
+        // Query all customer_client data to find sub-accounts
+        console.log("GoogleAdsClient: Querying all customer client data");
+        const query = `
+          SELECT
+            customer_client.client_customer,
+            customer_client.level,
+            customer_client.manager,
+            customer_client.descriptive_name,
+            customer_client.id,
+            customer_client.status
+          FROM
+            customer_client
+        `;
+        
+        const response = await customer.query(query);
+        console.log(`GoogleAdsClient: Found ${response?.length || 0} records from GAQL query`);
+        
+        // Process the data to find sub-accounts
+        const processedRows = response
+          .filter(row => row.customer_client != null)
+          .map(row => {
+            const clientInfo = row.customer_client;
+            const id = String(clientInfo?.client_customer || clientInfo?.id || '');
+            
+            // Skip the MCC account itself or invalid entries
+            if (id === mccId || !id) return null;
+            
+            return {
+              id,
+              resourceName: `customers/${id}`,
+              displayName: clientInfo?.descriptive_name || `Account ${id}`,
+              isMCC: !!clientInfo?.manager,
+              parentId: mccId
+            } as CustomerAccount;
+          })
+          .filter(item => item !== null);
+          
+        const subAccounts: CustomerAccount[] = processedRows as CustomerAccount[];
+        
+        if (subAccounts.length > 0) {
+          console.log(`GoogleAdsClient: Successfully found ${subAccounts.length} sub-accounts via GAQL query`);
+          return subAccounts;
+        }
+      } catch (gaqlError) {
+        console.error("GoogleAdsClient: GAQL query approach failed:", gaqlError);
+      }
 
       // Fall back to manual list
       console.log(`GoogleAdsClient: All attempts failed, using manual list`);

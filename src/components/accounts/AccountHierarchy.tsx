@@ -45,9 +45,13 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
     
     try {
       console.log(`AccountHierarchy: Fetching hierarchy for MCC ID ${mccId}${clearCache ? ' (with cache clear)' : ''}`);
+      
+      // Add a timestamp-based cache buster to prevent browser caching
+      const cacheBuster = `_t=${Date.now()}`;
+      
       const url = clearCache 
-        ? `/api/google-ads/accounts/hierarchy?mccId=${mccId}&clear_cache=true` 
-        : `/api/google-ads/accounts/hierarchy?mccId=${mccId}`;
+        ? `/api/google-ads/accounts/hierarchy?mccId=${mccId}&clear_cache=true&${cacheBuster}` 
+        : `/api/google-ads/accounts/hierarchy?mccId=${mccId}&${cacheBuster}`;
       
       const response = await axios.get(url);
       
@@ -166,7 +170,10 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
             size="sm" 
             color="primary"
             startContent={<RefreshCcw size={16} />}
-            onClick={fetchAccountHierarchy}
+            onClick={(e) => {
+              e.preventDefault();
+              fetchAccountHierarchy(false);
+            }}
           >
             Try Again
           </Button>

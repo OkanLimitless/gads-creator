@@ -159,45 +159,29 @@ export async function GET(request: Request) {
         // If we failed to get sub-accounts, use the fallback of known account IDs
         console.log("API route: Using fallback for sub-accounts");
         
-        // These are the accounts we identified from the screenshots
-        const knownTMatesAccounts = [
-          { id: '7983840017', displayName: 'TMates - 28/4 (798-384-0017)' },
-          { id: '7690643544', displayName: 'TMates - 28/4 (769-064-3544)' },
-          { id: '6819071774', displayName: 'TMates - 28/4 (681-907-1774)' },
-          { id: '5223493443', displayName: 'TMates - 25/4 (new) (522-349-3443)' },
-          { id: '2148495295', displayName: 'TMates - 25/4 (new) (214-849-5295)' },
-          { id: '9393931482', displayName: 'TMates - 22/04 (939-393-1482)' },
-          { id: '7467592545', displayName: 'TMates - 22/04 (746-759-2545)' },
-          { id: '6959732460', displayName: 'TMates - 22/04 (695-973-2460)' },
-          { id: '4433702076', displayName: 'TMates - 22/04 (443-370-2076)' }
+        // These are the accounts we identified from the screenshots - using EXACT format from UI
+        const tmatesAccounts = [
+          { id: '7983840017', displayName: 'TMates - 28/4', phoneNumber: '798-384-0017' },
+          { id: '7690643544', displayName: 'TMates - 28/4', phoneNumber: '769-064-3544' },
+          { id: '6819071774', displayName: 'TMates - 28/4', phoneNumber: '681-907-1774' },
+          { id: '5223493443', displayName: 'TMates - 25/4 (new)', phoneNumber: '522-349-3443' },
+          { id: '2148495295', displayName: 'TMates - 25/4 (new)', phoneNumber: '214-849-5295' },
+          { id: '9393931482', displayName: 'TMates - 22/04', phoneNumber: '939-393-1482' },
+          { id: '7467592545', displayName: 'TMates - 22/04', phoneNumber: '746-759-2545' },
+          { id: '6959732460', displayName: 'TMates - 22/04', phoneNumber: '695-973-2460' },
+          { id: '4433702076', displayName: 'TMates - 22/04', phoneNumber: '443-370-2076' }
         ];
         
-        // Also include the accounts we found previously
-        const previouslyKnownAccounts = [
-          '2118501982', '2619507613', '2683840764', '5144920403',
-          '2050006748', '4373104905', '7737102507', '8727073143',
-          '2091441670', '6863089884', '4559080452', '3466279954'
-        ];
+        // Format account objects to match what's in the UI
+        subAccounts = tmatesAccounts.map(acct => ({
+          id: acct.id,
+          resourceName: `customers/${acct.id}`,
+          displayName: `${acct.displayName} (${acct.phoneNumber})`,
+          isMCC: false,
+          parentId: mccId
+        }));
         
-        // Create CustomerAccount objects for the known accounts
-        subAccounts = [
-          ...knownTMatesAccounts.map(acct => ({
-            id: acct.id,
-            resourceName: `customers/${acct.id}`,
-            displayName: acct.displayName,
-            isMCC: false,
-            parentId: mccId
-          })),
-          ...previouslyKnownAccounts.map(id => ({
-            id,
-            resourceName: `customers/${id}`,
-            displayName: `Account ${id}`,
-            isMCC: false,
-            parentId: mccId
-          }))
-        ];
-        
-        console.log(`API route: Created ${subAccounts.length} fallback sub-accounts`);
+        console.log(`API route: Created ${subAccounts.length} TMates sub-accounts as fallback`);
       }
       
       // Log information about found sub-accounts

@@ -704,7 +704,9 @@ export class GoogleAdsClient {
         });
         
         if (!tokenResponse.ok) {
-          throw new Error(`Failed to get access token: ${await tokenResponse.text()}`);
+          const errorText = await tokenResponse.text();
+          console.error(`GoogleAdsClient: OAuth token error: ${errorText}`);
+          throw new Error(`Failed to get access token: ${errorText}`);
         }
         
         const tokenData = await tokenResponse.json();
@@ -841,44 +843,14 @@ export class GoogleAdsClient {
         console.error("GoogleAdsClient: GAQL query approach failed:", gaqlError);
       }
 
-      // Fall back to manual list
-      console.log(`GoogleAdsClient: All attempts failed, using manual list`);
-      return this.getManualSubAccountsList(mccId);
+      // If all methods to fetch sub-accounts have failed, log the failure and return empty array
+      console.log(`GoogleAdsClient: All attempts to fetch sub-accounts failed, returning empty array`);
+      return [];
     } catch (error) {
       console.error(`GoogleAdsClient: All methods failed for sub-accounts fetching:`, error);
-      // Final fallback to manual list
-      return this.getManualSubAccountsList(mccId);
+      // Return empty array instead of a fallback list
+      return [];
     }
-  }
-  
-  // Method to return a manual list of sub-accounts when all API approaches fail
-  private getManualSubAccountsList(mccId: string): CustomerAccount[] {
-    // The accounts that should appear under the MCC
-    // Format doesn't matter as much as getting the right accounts
-    const manualAccounts = [
-      // Examples from your Google Ads interface 
-      { id: '7983840017', displayName: 'TMates - 28/4 (798-384-0017)' },
-      { id: '7690643544', displayName: 'TMates - 28/4 (769-064-3544)' },
-      { id: '6819071774', displayName: 'TMates - 28/4 (681-907-1774)' },
-      { id: '5223493443', displayName: 'TMates - 25/4 (new) (522-349-3443)' },
-      { id: '2148495295', displayName: 'TMates - 25/4 (new) (214-849-5295)' },
-      { id: '9393931482', displayName: 'TMates - 22/04 (939-393-1482)' },
-      { id: '7467592545', displayName: 'TMates - 22/04 (746-759-2545)' },
-      { id: '6959732460', displayName: 'TMates - 22/04 (695-973-2460)' },
-      { id: '4433702076', displayName: 'TMates - 22/04 (443-370-2076)' }
-    ];
-    
-    // Convert to CustomerAccount objects
-    const subAccounts = manualAccounts.map(acct => ({
-      id: acct.id,
-      resourceName: `customers/${acct.id}`,
-      displayName: acct.displayName,
-      isMCC: false,
-      parentId: mccId
-    }));
-    
-    console.log(`GoogleAdsClient: Returning ${subAccounts.length} manually configured sub-accounts`);
-    return subAccounts;
   }
 
   async createSearchCampaign(params: CreateCampaignParams, refreshToken: string) {

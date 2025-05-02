@@ -49,10 +49,14 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
       // Add a timestamp-based cache buster to prevent browser caching
       const cacheBuster = `_t=${Date.now()}`;
       
-      const url = clearCache 
-        ? `/api/google-ads/accounts/hierarchy?mccId=${mccId}&clear_cache=true&${cacheBuster}` 
-        : `/api/google-ads/accounts/hierarchy?mccId=${mccId}&${cacheBuster}`;
+      // Add debug flag to include more details from the backend
+      const debugParam = `debug=true`;
       
+      const url = clearCache 
+        ? `/api/google-ads/accounts/hierarchy?mccId=${mccId}&clear_cache=true&${debugParam}&${cacheBuster}` 
+        : `/api/google-ads/accounts/hierarchy?mccId=${mccId}&${debugParam}&${cacheBuster}`;
+      
+      console.log(`AccountHierarchy: Making API request to: ${url}`);
       const response = await axios.get(url);
       
       // Save raw API data for debugging
@@ -82,6 +86,12 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
       } else {
         toast.info("No sub-accounts found for this MCC");
       }
+      
+      // Check for warnings in the response
+      if (response.data.warnings) {
+        console.warn("AccountHierarchy: API returned warnings:", response.data.warnings);
+        toast.warning("API warnings detected - check Debug data for details");
+      }
     } catch (err: any) {
       console.error("Error fetching account hierarchy:", err);
       
@@ -95,7 +105,13 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
       setDebugInfo({
         error: errorResponse || err,
         timestamp: errorResponse?.timestamp || new Date().toISOString(),
-        diagnosticReport: errorResponse?.diagnosticReport
+        diagnosticReport: errorResponse?.diagnosticReport,
+        requestInfo: {
+          url: err.config?.url,
+          method: err.config?.method,
+          status: err.response?.status,
+          statusText: err.response?.statusText
+        }
       });
       
       toast.error("Failed to load account hierarchy");
@@ -178,6 +194,84 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
             Try Again
           </Button>
         </div>
+        
+        <Card className="border border-red-200 bg-red-50">
+          <CardBody>
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-full bg-red-100">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-red-700">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-medium text-red-800 mb-2">Error Loading Account Hierarchy</h3>
+                <div className="text-red-700 mb-2">{error}</div>
+                
+                {debugInfo?.error?.details && (
+                  <div className="mb-3">
+                    <p className="font-medium text-red-700 text-sm">Details:</p>
+                    <p className="text-sm text-red-600 mt-1">{debugInfo.error.details}</p>
+                  </div>
+                )}
+                
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <Button 
+                    size="sm" 
+                    color="danger"
+                    variant="flat"
+                    onClick={handleRetry}
+                  >
+                    Retry
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="secondary"
+                    onClick={fetchFullAccountList}
+                  >
+                    Try Full Account List
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="flat" 
+                    color={showRawApiData ? "danger" : "default"}
+                    onClick={(e: React.MouseEvent) => {
+                      e.preventDefault();
+                      setShowRawApiData(!showRawApiData);
+                    }}
+                  >
+                    {showRawApiData ? "Hide Debug Info" : "Show Debug Info"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+        
+        {/* Detailed error info */}
+        {showRawApiData && debugInfo && (
+          <Card className="border border-slate-200">
+            <CardBody>
+              <h3 className="text-sm font-medium mb-2">Diagnostic Information</h3>
+              <div className="bg-gray-800 p-4 rounded-md overflow-auto max-h-96 text-white">
+                <pre className="text-xs whitespace-pre-wrap">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              </div>
+              <div className="mt-4 bg-slate-100 p-3 rounded-md">
+                <h4 className="text-xs font-medium mb-2">Troubleshooting Tips:</h4>
+                <ul className="list-disc pl-5 text-xs space-y-1 text-slate-700">
+                  <li>Check that your Google Ads account has proper API access</li>
+                  <li>Verify authentication settings and refresh tokens</li>
+                  <li>Confirm your Google Ads developer token is valid</li>
+                  <li>Look for rate limiting or quota issues in the error details</li>
+                  <li>Try the "Full Account List" button to use a different API endpoint</li>
+                </ul>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+        
         <DiagnosticErrorDisplay
           error={error}
           details={debugInfo?.error?.details}
@@ -242,7 +336,7 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
         <Card className="w-full mb-4">
           <CardBody>
             <h3 className="text-sm font-medium mb-2">Raw API Response Data</h3>
-            <div className="bg-gray-100 p-2 rounded-md overflow-auto max-h-64">
+            <div className="bg-gray-800 p-4 rounded-md overflow-auto max-h-96 text-white">
               <pre className="text-xs whitespace-pre-wrap">
                 {JSON.stringify(rawApiData, null, 2)}
               </pre>
@@ -253,7 +347,7 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
       
       {/* Show full account list for debugging */}
       {showFullAccountList && fullAccountList && (
-        <Card className="w-full mb-4">
+        <Card className="w-full mb-4 border border-blue-200">
           <CardBody>
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-sm font-medium">Full Account List ({fullAccountList.totalAccounts} accounts)</h3>
@@ -265,25 +359,37 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                 Hide
               </Button>
             </div>
-            <div className="bg-gray-100 p-2 rounded-md overflow-auto max-h-96">
+            <div className="bg-slate-50 p-4 rounded-md overflow-auto max-h-96 border border-slate-200">
               <table className="min-w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-200">
-                    <th className="p-2 text-left">ID</th>
-                    <th className="p-2 text-left">Name</th>
-                    <th className="p-2 text-left">Level</th>
-                    <th className="p-2 text-left">Is MCC</th>
-                    <th className="p-2 text-left">Status</th>
+                  <tr className="bg-slate-200">
+                    <th className="p-2 text-left font-semibold">ID</th>
+                    <th className="p-2 text-left font-semibold">Name</th>
+                    <th className="p-2 text-left font-semibold">Level</th>
+                    <th className="p-2 text-left font-semibold">Is MCC</th>
+                    <th className="p-2 text-left font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {fullAccountList.accounts.map((account: any, index: number) => (
-                    <tr key={account.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="p-2">{account.id}</td>
+                    <tr key={account.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50 hover:bg-blue-50'}>
+                      <td className="p-2 font-mono">{account.id}</td>
                       <td className="p-2">{account.displayName}</td>
-                      <td className="p-2">{account.level}</td>
-                      <td className="p-2">{account.isMCC ? 'Yes' : 'No'}</td>
-                      <td className="p-2">{account.status}</td>
+                      <td className="p-2 text-center">{account.level}</td>
+                      <td className="p-2 text-center">
+                        {account.isMCC ? 
+                          <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Yes</span> : 
+                          <span className="inline-block px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">No</span>
+                        }
+                      </td>
+                      <td className="p-2">
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs ${
+                          account.status === 'ENABLED' ? 'bg-green-100 text-green-800' : 
+                          account.status === 'DISABLED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {account.status || 'Unknown'}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -294,19 +400,21 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
       )}
       
       {mccAccount && (
-        <Card className="w-full">
+        <Card className="w-full border border-slate-200 shadow-sm">
           <CardBody>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="font-semibold">{mccAccount.displayName || `MCC Account ${mccAccount.id}`}</span>
-              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">MCC</span>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="font-semibold text-lg">{mccAccount.displayName || `MCC Account ${mccAccount.id}`}</span>
+              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">MCC</span>
             </div>
-            <p className="text-sm text-gray-500">ID: {mccAccount.id}</p>
-            <p className="text-sm text-gray-500">Resource: {mccAccount.resourceName}</p>
+            <div className="bg-slate-50 p-3 rounded-md mb-4 flex flex-col gap-1">
+              <p className="text-sm text-slate-700"><span className="font-medium">ID:</span> <span className="font-mono">{mccAccount.id}</span></p>
+              <p className="text-sm text-slate-700"><span className="font-medium">Resource:</span> <span className="font-mono text-xs">{mccAccount.resourceName}</span></p>
+            </div>
             
             {subAccounts.length > 0 ? (
               <div className="mt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-sm font-medium">Sub Accounts ({subAccounts.length})</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-md font-medium">Sub Accounts <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-sm">{subAccounts.length}</span></h3>
                   
                   {/* Pagination controls */}
                   {totalPages > 1 && (
@@ -336,13 +444,13 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                   )}
                 </div>
                 
-                <Accordion>
+                <Accordion className="bg-white rounded-md border border-slate-200">
                   {currentAccounts.map((account) => (
                     <AccordionItem
                       key={account.id}
                       title={
                         <div className="flex items-center">
-                          <span>{account.displayName || `Account ${account.id}`}</span>
+                          <span className="font-medium">{account.displayName || `Account ${account.id}`}</span>
                           {account.isMCC && (
                             <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
                               MCC
@@ -350,14 +458,22 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                           )}
                         </div>
                       }
-                      subtitle={`ID: ${account.id}`}
-                      indicator={<ChevronDown className="text-gray-500" />}
+                      subtitle={<span className="font-mono text-xs text-slate-500">ID: {account.id}</span>}
+                      indicator={<ChevronDown className="text-slate-500" />}
+                      classNames={{
+                        base: "border-b border-slate-200 last:border-0 hover:bg-slate-50",
+                        title: "text-base",
+                        subtitle: "text-slate-600"
+                      }}
                     >
-                      <div className="px-2 py-1 space-y-1">
-                        <p className="text-sm">Resource: {account.resourceName}</p>
-                        <p className="text-sm">Parent MCC: {account.parentId}</p>
-                        <p className="text-sm">Account Type: {account.isMCC ? 'Manager Account (MCC)' : 'Client Account'}</p>
-                        <p className="text-sm">Relationship: Sub-account of {mccAccount.id}</p>
+                      <div className="px-3 py-2 space-y-2 bg-slate-50 rounded-b-md">
+                        <p className="text-sm"><span className="font-medium text-slate-700">Resource:</span> <span className="font-mono text-xs">{account.resourceName}</span></p>
+                        <p className="text-sm"><span className="font-medium text-slate-700">Parent MCC:</span> <span className="font-mono text-xs">{account.parentId}</span></p>
+                        <p className="text-sm"><span className="font-medium text-slate-700">Account Type:</span> {account.isMCC ? 
+                          <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs ml-1">Manager Account (MCC)</span> : 
+                          <span className="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs ml-1">Client Account</span>
+                        }</p>
+                        <p className="text-sm"><span className="font-medium text-slate-700">Relationship:</span> <span className="text-slate-600">Sub-account of <span className="font-mono text-xs">{mccAccount.id}</span></span></p>
                       </div>
                     </AccordionItem>
                   ))}
@@ -407,28 +523,57 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                 )}
               </div>
             ) : (
-              <div className="mt-4 text-sm text-gray-500">
-                <div className="p-4 border border-yellow-200 bg-yellow-50 rounded-md">
-                  <p className="font-medium text-yellow-800">No sub-accounts found for this MCC.</p>
-                  <p className="mt-1 text-yellow-700">
-                    This could be because:
-                  </p>
-                  <ul className="list-disc pl-5 mt-1 text-yellow-700 text-xs">
-                    <li>Your Google account doesn't have access to sub-accounts under this MCC</li>
-                    <li>This account is not actually an MCC account</li>
-                    <li>There are no sub-accounts under this MCC</li>
-                    <li>The Google Ads API is experiencing issues</li>
-                  </ul>
-                  <div className="mt-2">
-                    <Button 
-                      size="sm" 
-                      variant="flat" 
-                      color="warning"
-                      onClick={forceRefresh}
-                      startContent={<RefreshCcw size={14} />}
-                    >
-                      Force Refresh
-                    </Button>
+              <div className="mt-4">
+                <div className="p-6 border border-amber-200 bg-amber-50 rounded-md">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-full bg-amber-100">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-amber-700">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-amber-900 mb-2">No Sub-Accounts Found</h3>
+                      <p className="text-amber-800 mb-4">
+                        No sub-accounts were found for this MCC account. This could be due to several reasons:
+                      </p>
+                      <ul className="list-disc pl-5 mb-4 text-amber-700 space-y-1">
+                        <li>Your Google account doesn't have access to sub-accounts under this MCC</li>
+                        <li>This account might not actually be an MCC account</li>
+                        <li>There are no sub-accounts linked to this MCC</li>
+                        <li>The Google Ads API might be experiencing issues or has rate-limited the requests</li>
+                      </ul>
+                      
+                      <div className="flex gap-3 mt-4">
+                        <Button 
+                          size="sm" 
+                          variant="flat" 
+                          color="warning"
+                          onClick={forceRefresh}
+                          startContent={<RefreshCcw size={14} />}
+                        >
+                          Force Refresh
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="primary"
+                          onClick={fetchFullAccountList}
+                        >
+                          Try Full Account List
+                        </Button>
+                      </div>
+                      
+                      {/* Debug tips */}
+                      <div className="mt-5 border-t border-amber-200 pt-4">
+                        <p className="text-xs text-amber-800 font-medium">Debugging Tips:</p>
+                        <ul className="list-disc pl-5 mt-1 text-xs text-amber-700 space-y-1">
+                          <li>Enable "Show Raw Data" to view the API response</li>
+                          <li>Try the "Full Account List" button to use a different API method</li>
+                          <li>Check console logs for detailed error information</li>
+                          <li>Verify Google Ads API access and permissions in Google Cloud Console</li>
+                        </ul>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

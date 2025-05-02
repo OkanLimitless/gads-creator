@@ -146,78 +146,29 @@ export async function GET(request: Request) {
       
       // Get sub-accounts for the MCC
       console.log(`API route: Fetching sub-accounts for MCC ${mccId}`);
-      let subAccounts = [];
+      let subAccounts: CustomerAccount[] = [];
       let subAccountsFetchError = null;
       
       try {
-        // Force using the manual list for now
-        const forceManualList = false;
-        
-        if (forceManualList) {
-          console.log(`API route: Forcing use of manual sub-accounts list`);
-          // Create the accounts we know from the screenshot
-          const manualAccounts = [
-            { id: '7983840017', displayName: 'TMates - 28/4 (798-384-0017)' },
-            { id: '7690643544', displayName: 'TMates - 28/4 (769-064-3544)' },
-            { id: '6819071774', displayName: 'TMates - 28/4 (681-907-1774)' },
-            { id: '5223493443', displayName: 'TMates - 25/4 (new) (522-349-3443)' },
-            { id: '2148495295', displayName: 'TMates - 25/4 (new) (214-849-5295)' },
-            { id: '9393931482', displayName: 'TMates - 22/04 (939-393-1482)' },
-            { id: '7467592545', displayName: 'TMates - 22/04 (746-759-2545)' },
-            { id: '6959732460', displayName: 'TMates - 22/04 (695-973-2460)' },
-            { id: '4433702076', displayName: 'TMates - 22/04 (443-370-2076)' }
-          ];
-          
-          // And add some of the accounts we know the API has found previously
-          const previouslyFoundAccounts = [
-            '2118501982', '2619507613', '2683840764', '5144920403'
-          ];
-          
-          subAccounts = [
-            ...manualAccounts.map(acct => ({
-              id: acct.id,
-              resourceName: `customers/${acct.id}`,
-              displayName: acct.displayName,
-              isMCC: false,
-              parentId: mccId
-            }))
-          ];
-          
-          console.log(`API route: Using manual list of ${subAccounts.length} sub-accounts`);
-        } else {
-          subAccounts = await googleAdsClient.getSubAccounts(mccId, session.refreshToken);
-          console.log(`API route: Found ${subAccounts.length} sub-accounts from API`);
-        }
-      } catch (subError) {
+        subAccounts = await googleAdsClient.getSubAccounts(mccId, session.refreshToken);
+        console.log(`API route: Found ${subAccounts.length} sub-accounts from API`);
+      } catch (subError: unknown) {
         console.error("API route: Error fetching sub-accounts:", subError);
         subAccountsFetchError = subError;
         
-        // If we failed to get sub-accounts, use the fallback of known account IDs
-        console.log("API route: Using fallback for sub-accounts");
+        // Enhanced error logging for debugging
+        console.log("API route: Sub-accounts fetch error details:");
+        console.log(`- Error message: ${(subError as any)?.message || 'Unknown error'}`);
+        console.log(`- Error code: ${(subError as any)?.code || 'No error code'}`);
         
-        // These are the accounts we identified from the screenshots - using EXACT format from UI
-        const tmatesAccounts = [
-          { id: '7983840017', displayName: 'TMates - 28/4', phoneNumber: '798-384-0017' },
-          { id: '7690643544', displayName: 'TMates - 28/4', phoneNumber: '769-064-3544' },
-          { id: '6819071774', displayName: 'TMates - 28/4', phoneNumber: '681-907-1774' },
-          { id: '5223493443', displayName: 'TMates - 25/4 (new)', phoneNumber: '522-349-3443' },
-          { id: '2148495295', displayName: 'TMates - 25/4 (new)', phoneNumber: '214-849-5295' },
-          { id: '9393931482', displayName: 'TMates - 22/04', phoneNumber: '939-393-1482' },
-          { id: '7467592545', displayName: 'TMates - 22/04', phoneNumber: '746-759-2545' },
-          { id: '6959732460', displayName: 'TMates - 22/04', phoneNumber: '695-973-2460' },
-          { id: '4433702076', displayName: 'TMates - 22/04', phoneNumber: '443-370-2076' }
-        ];
+        if ((subError as any)?.response) {
+          console.log(`- Response status: ${(subError as any).response.status}`);
+          console.log(`- Response data:`, (subError as any).response.data);
+        }
         
-        // Format account objects to match what's in the UI
-        subAccounts = tmatesAccounts.map(acct => ({
-          id: acct.id,
-          resourceName: `customers/${acct.id}`,
-          displayName: `${acct.displayName} (${acct.phoneNumber})`,
-          isMCC: false,
-          parentId: mccId
-        }));
-        
-        console.log(`API route: Created ${subAccounts.length} TMates sub-accounts as fallback`);
+        // Return empty sub-accounts instead of using a fallback
+        subAccounts = [];
+        console.log("API route: Returning empty sub-accounts array due to API error");
       }
       
       // Log information about found sub-accounts

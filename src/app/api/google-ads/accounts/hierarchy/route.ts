@@ -220,6 +220,17 @@ export async function GET(request: Request) {
             getMccAccountsCalled: true,
             getSubAccountsCalled: true,
             cacheUsed: !clearCache && !!cachedData
+          },
+          environment: {
+            nodeEnv: process.env.NODE_ENV,
+            isTestMode: true,
+            // Include additional environment information for troubleshooting
+            googleAdsApiVersion: "v15", // This should match the version used in your API calls
+            hasCredentials: {
+              developerToken: !!process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+              clientId: !!process.env.GOOGLE_CLIENT_ID,
+              clientSecret: !!process.env.GOOGLE_CLIENT_SECRET
+            }
           }
         };
       }

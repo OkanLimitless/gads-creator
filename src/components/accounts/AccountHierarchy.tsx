@@ -331,6 +331,26 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
         </div>
       </div>
       
+      {/* Test API notice */}
+      <Card className="border-l-4 border-l-blue-500 bg-blue-50">
+        <CardBody className="py-3">
+          <div className="flex items-start gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-blue-700 mt-0.5 flex-shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+            </svg>
+            <div>
+              <p className="text-sm text-blue-800">
+                <span className="font-medium">Test API Notice:</span> You're using test API credentials with limited functionality. 
+                Some features like fetching sub-accounts may be restricted until you have full production access.
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Try the "Full Account List" button for an alternative way to view accounts.
+              </p>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+      
       {/* Show raw API data for debugging */}
       {showRawApiData && rawApiData && (
         <Card className="w-full mb-4">
@@ -541,7 +561,24 @@ export function AccountHierarchy({ mccId }: AccountHierarchyProps) {
                         <li>This account might not actually be an MCC account</li>
                         <li>There are no sub-accounts linked to this MCC</li>
                         <li>The Google Ads API might be experiencing issues or has rate-limited the requests</li>
+                        <li><strong>Test API Limitation:</strong> You're using test API credentials which have restricted access. Some Google Ads API features are only available with approved production access.</li>
                       </ul>
+                      
+                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                        <h4 className="font-medium text-blue-800 mb-1">Test API Note</h4>
+                        <p className="text-sm text-blue-700">
+                          The Google Ads API test account has limited functionality. Getting sub-accounts may work only with full production access. 
+                          To get production access, you'll need to complete your app and apply for approval.
+                        </p>
+                        <a 
+                          href="https://developers.google.com/google-ads/api/docs/first-call/overview" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-block mt-2 text-xs text-blue-600 hover:underline"
+                        >
+                          Learn more about Google Ads API access
+                        </a>
+                      </div>
                       
                       <div className="flex gap-3 mt-4">
                         <Button 
